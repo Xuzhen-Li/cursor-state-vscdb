@@ -20,7 +20,7 @@ This repository keeps the **full original case study intact** and adds short gui
 - Read-only one-shot: [`scripts/diagnose.sh`](scripts/diagnose.sh)
 - Command reference: [docs/DIAGNOSTIC_COMMANDS.md](docs/DIAGNOSTIC_COMMANDS.md) (also linked from How to)
 - Agent paste context: [docs/AGENT_CONTEXT.md](docs/AGENT_CONTEXT.md)
-- Related tools (inspiration): [docs/RELATED.md](docs/RELATED.md)
+- Forum peers + tools: [docs/RELATED.md](docs/RELATED.md)
 - Preserve rule: [docs/PRESERVE.md](docs/PRESERVE.md)
 
 ## Snapshot from the case
@@ -44,7 +44,7 @@ cd cursor-state-vscdb
 ## Figures
 
 - [Storage layout](figures/schematic/storage-layout/preview.png) — `state.vscdb` vs transcripts
-- [Recovery flow](figures/schematic/recovery-flow/preview.png) — Path A keep DB / Path B `mv` bypass
+- [Recovery flow](figures/schematic/recovery-flow/preview.png) — quit → mv aside → fresh DB (optional Export/GC)
 - [Size compare](figures/charts/size-compare/preview.png) — DB vs transcripts / workspace / cache (log scale)
 - [KV shape](figures/charts/kv-shape/preview.png) — table row magnitudes (log scale)
 

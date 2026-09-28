@@ -95,3 +95,7 @@ Need roughly DB-sized free space (plan for up to ~2×). If compact hits Disk Ful
 ## 6. Redact secrets
 
 `ps` lines may contain `--api-key`. Never paste raw process lists to GitHub / Reddit / forums.
+
+## Forum peers
+
+Same-class reports and staff replies: [RELATED.md](RELATED.md) (Cursor Community Forum section).
