@@ -10,7 +10,10 @@
 <line x1="80" y1="174" x2="96" y2="174" stroke="#64748B" stroke-width="2"/>
 <rect x="132" y="210" width="340" height="48" rx="8" fill="#9B1C1C"/>
 <text x="144" y="230" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="start">state.vscdb</text>
-<text x="144" y="248" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="normal" fill="#FFFFFF" text-anchor="start">~52 GB · three tables · HOT</text>
+<text x="144" y="248" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="normal" fill="#FFFFFF" text-anchor="start">~52 GB · three tables</text>
+<!-- HOT badge inside state.vscdb box, left of right edge; never overlaps transcripts panel at x=560 -->
+<rect x="400" y="222" width="56" height="24" rx="6" fill="#FFFFFF"/>
+<text x="428" y="239" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" fill="#9B1C1C" text-anchor="middle">HOT</text>
 <line x1="116" y1="234" x2="132" y2="234" stroke="#64748B" stroke-width="2"/>
 <rect x="132" y="270" width="340" height="48" rx="8" fill="#2A629A"/>
 <text x="144" y="290" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="start">state.vscdb-wal / -shm</text>
