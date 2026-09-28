@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="640" viewBox="0 0 920 640">
+<rect width="100%" height="100%" fill="#FFFFFF"/>
+<text x="28" y="32" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#1e3a5f" text-anchor="start">Storage layout: state.vscdb vs transcripts</text>
+<text x="28" y="54" font-family="Noto Sans CJK SC, Noto Sans SC, Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#2A629A" text-anchor="start">本机路径与体积对比</text>
+<rect x="28" y="78" width="412" height="127" rx="10" fill="#E8F0F8" stroke="#2A629A" stroke-width="1.5"/>
+<text x="44" y="104" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#1e3a5f" text-anchor="start">globalStorage / state.vscdb</text>
+<text x="44" y="126" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="normal" fill="#1e3a5f" text-anchor="start">~/Library/Application Support/Cursor/</text>
+<text x="44" y="144" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="normal" fill="#1e3a5f" text-anchor="start">User/globalStorage/state.vscdb</text>
+<rect x="44" y="158" width="156" height="32" rx="8" fill="#9B1C1C"/>
+<text x="122" y="180" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">~52 GB</text>
+<text x="214" y="180" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="normal" fill="#1e3a5f" text-anchor="start">pages in use · freelist ~0</text>
+<rect x="28" y="224" width="250" height="60" rx="10" fill="#1e3a5f"/>
+<text x="153" y="260" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="middle">ItemTable</text>
+<rect x="290" y="224" width="142" height="60" rx="10" fill="#E8F0F8" stroke="#2A629A" stroke-width="1.5"/>
+<text x="361" y="260" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="normal" fill="#1e3a5f" text-anchor="middle">~976 rows</text>
+<rect x="28" y="302" width="250" height="60" rx="10" fill="#9B1C1C"/>
+<text x="153" y="338" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">cursorDiskKV</text>
+<rect x="290" y="302" width="142" height="60" rx="10" fill="#E8F0F8" stroke="#2A629A" stroke-width="1.5"/>
+<text x="361" y="338" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="normal" fill="#1e3a5f" text-anchor="middle">~2.73M rows</text>
+<text x="444" y="338" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#9B1C1C" text-anchor="start">← bulk of 52 GB</text>
+<rect x="28" y="380" width="250" height="60" rx="10" fill="#1e3a5f"/>
+<text x="153" y="416" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="middle">composerHeaders</text>
+<rect x="290" y="380" width="142" height="60" rx="10" fill="#E8F0F8" stroke="#2A629A" stroke-width="1.5"/>
+<text x="361" y="416" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="normal" fill="#1e3a5f" text-anchor="middle">~1,048 rows</text>
+<rect x="480" y="78" width="412" height="292" rx="12" fill="#FFFFFF" stroke="#2A629A" stroke-width="1.5"/>
+<text x="500" y="110" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#1e3a5f" text-anchor="start">~/.cursor/projects</text>
+<text x="500" y="134" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="normal" fill="#2A629A" text-anchor="start">agent-transcripts/*.jsonl</text>
+<rect x="500" y="156" width="220" height="64" rx="10" fill="#2A629A"/>
+<text x="610" y="182" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">~728 MB</text>
+<text x="610" y="206" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="normal" fill="#FFFFFF" text-anchor="middle">~1,015 JSONL files</text>
+<text x="500" y="260" font-family="Noto Sans CJK SC, Noto Sans SC, Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1e3a5f" text-anchor="start">Volume contrast / 体积对比</text>
+<rect x="500" y="286" width="360" height="28" rx="6" fill="#9B1C1C"/>
+<text x="512" y="306" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" fill="#FFFFFF" text-anchor="start">state.vscdb  ~52 GB</text>
+<rect x="500" y="330" width="28" height="28" rx="6" fill="#2A629A"/>
+<text x="540" y="350" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="normal" fill="#1e3a5f" text-anchor="start">transcripts ~728 MB (~70× smaller)</text>
+<text x="28" y="492" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="normal" fill="#1e3a5f" text-anchor="start">Takeaway: JSONL on disk is insurance; UI/index weight sits in cursorDiskKV.</text>
+<text x="28" y="518" font-family="Noto Sans CJK SC, Noto Sans SC, Arial, Helvetica, sans-serif" font-size="12" font-weight="normal" fill="#2A629A" text-anchor="start">结论：磁盘 JSONL 只是备份；界面与索引体积主要在 cursorDiskKV。</text>
+<text x="28" y="552" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="normal" fill="#1e3a5f" text-anchor="start">Contrast: workspaceStorage ~294 MB · Cursor Cache ~41 MB</text>
+</svg>
