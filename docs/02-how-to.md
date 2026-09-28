@@ -38,7 +38,11 @@ Rough thresholds (heuristic, not official):
 | 10–30 GB | Plan cleanup soon; free disk before compact |
 | &gt; 30 GB | Treat as incident; prefer move-aside recovery if IDE is unusable |
 
-*Figure (TBD):* [figures/charts/size-compare/](../figures/charts/size-compare/) — case illustration of DB vs transcript sizes.
+**Figure — relative sizes (case illustration)**
+
+![Relative size of stored components](../figures/charts/size-compare/preview.png)
+
+[Source](../figures/charts/size-compare/) · also [KV row magnitudes](../figures/charts/kv-shape/preview.png)
 
 ## 2. Emergency: work again now (`mv`, never `rm`)
 

@@ -45,7 +45,8 @@ cd cursor-state-vscdb
 
 - [Storage layout](figures/schematic/storage-layout/preview.png) — `state.vscdb` vs transcripts
 - [Recovery flow](figures/schematic/recovery-flow/preview.png) — Path A keep DB / Path B `mv` bypass
-- Charts (size / KV shape): landing in follow-up PRs
+- [Size compare](figures/charts/size-compare/preview.png) — DB vs transcripts / workspace / cache (log scale)
+- [KV shape](figures/charts/kv-shape/preview.png) — table row magnitudes (log scale)
 
 ## License
 
