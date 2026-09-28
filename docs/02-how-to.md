@@ -19,7 +19,8 @@ Ignore macOS `CursorUIViewService`. No Cursor IDE / Electron workers should rema
 ## 1. Read-only diagnose
 
 ```bash
-./scripts/diagnose.sh
+cd /path/to/cursor-state-vscdb   # clone root
+./scripts/diagnose.sh           # macOS default; Linux: CURSOR_STATE_DB=... ./scripts/diagnose.sh
 # or:
 du -h "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
 sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
@@ -37,17 +38,24 @@ Rough thresholds (heuristic, not official):
 | 10–30 GB | Plan cleanup soon; free disk before compact |
 | &gt; 30 GB | Treat as incident; prefer move-aside recovery if IDE is unusable |
 
+*Figure (TBD):* [figures/charts/size-compare/](../figures/charts/size-compare/) — case illustration of DB vs transcript sizes.
+
 ## 2. Emergency: work again now (`mv`, never `rm`)
+
+STOP: Quit Cursor first. This moves `state.vscdb` aside (never `rm`) so a fresh DB can start.
 
 ```bash
 cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
-mkdir -p state-vscdb-backup-$(date +%Y%m%d)
+BACKUP="state-vscdb-backup-$(date +%Y%m%d)"
+mkdir -p "$BACKUP"
 for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
-  [ -e "$f" ] && mv "$f" state-vscdb-backup-$(date +%Y%m%d)/
+  [ -e "$f" ] && mv "$f" "$BACKUP"/
 done
 ```
 
-Relaunch Cursor → new DB → New Chat → `hello`. Keep the backup forever until you decide.
+Relaunch Cursor → new DB → New Chat → `hello`. Keep the backup until you decide you no longer need it.
+
+*Figure (TBD):* [figures/schematic/recovery-flow/](../figures/schematic/recovery-flow/) — quit → diagnose → export → GC → or `mv` aside.
 
 ## 3. Prefer keeping history
 
@@ -62,13 +70,15 @@ If still huge: export → delete a few monster long chats → GC → quit. Prefe
 
 ## 4. Do not start here
 
+STOP: Do not run this first — users report chat loss; only after backup and an explicit impact discussion.
+
 ```sql
 DELETE FROM cursorDiskKV WHERE key LIKE 'agentKv:%';
 -- ...
 VACUUM;
 ```
 
-Users have reported chat loss. Only after explicit impact discussion and backup.
+Do this only after an explicit impact discussion and a backup.
 
 ## 5. Free disk before compact
 

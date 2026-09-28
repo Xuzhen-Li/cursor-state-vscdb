@@ -132,7 +132,7 @@ composerHeaders
 sqlite3 ".../state.vscdb" "PRAGMA integrity_check;"
 ```
 
-ran with no output for a long time until Ctrl+C. That does **not** prove corruption — a 50+ GB scan can simply be slow. Prefer row counts and page stats first.
+That command ran with no output for a long time until Ctrl+C. That does **not** prove corruption — a 50+ GB scan can simply be slow. Prefer row counts and page stats first.
 
 ---
 
@@ -236,7 +236,7 @@ Official-ish maintenance for orphaned Agent KV. Orphans can go; live data refere
 
 ## 15. GC / VACUUM need lots of free disk
 
-Compaction may rewrite nearly a full DB copy (sometimes approaching 2× free space). Community reports of Disk Full during “Compacting Storage” on ~30 GB DBs. Do not `VACUUM` a multi-ten-GB DB when the disk is almost full.
+Compaction may rewrite nearly a full DB copy (sometimes approaching 2× free space). Community reports of Disk Full during “Compacting Storage” on ~30 GB DBs. Do not `VACUUM` a tens-of-GB DB when the disk is almost full.
 
 ---
 

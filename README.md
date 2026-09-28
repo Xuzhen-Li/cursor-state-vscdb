@@ -1,6 +1,6 @@
 # cursor-state-vscdb
 
-**Loading chats** / Agent hang after reboot can be a **local** SQLite problem: a multi-ten-GB `state.vscdb`, not (only) the network. Paths and scripts below target **macOS Cursor**.
+**Loading chats** / Agent hang after reboot can be a **local** SQLite problem: a tens-of-GB `state.vscdb`, not only a network problem. Paths and scripts below target **macOS Cursor**.
 
 This repository keeps the **full original case study intact** and adds short guides, a read-only diagnose script, and figures.
 
