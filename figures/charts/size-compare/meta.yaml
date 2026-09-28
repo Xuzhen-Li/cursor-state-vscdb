@@ -1,0 +1,5 @@
+title: "Relative size of stored components"
+category: charts
+packages:
+  - ggplot2
+note: "Case illustration with simulated layout numbers; display values are fixed targets and are not a real privacy database dump."

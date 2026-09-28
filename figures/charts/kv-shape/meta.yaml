@@ -1,0 +1,5 @@
+title: "Schematic row-count magnitudes"
+category: charts
+packages:
+  - ggplot2
+note: "Case illustration with simulated values; target magnitudes are shown without using a real privacy database dump."
