@@ -1,31 +1,27 @@
 # cursor-state-vscdb
 
-**Loading chats** / Agent hang after reboot can be a **local** SQLite problem: a multi-ten-GB `state.vscdb`, not (only) the network.
+**Loading chats** / Agent hang after reboot can be a **local** SQLite problem: a multi-ten-GB `state.vscdb`, not (only) the network. Paths and scripts below target **macOS Cursor**.
 
-This repository keeps the **full original case study intact** and adds short guides plus a read-only diagnose script.
+This repository keeps the **full original case study intact** and adds short guides, a read-only diagnose script, and figures.
 
 ## In 3 minutes: which door?
 
-| You need… | Open |
-|-----------|------|
-| Why a local DB can look like a network outage | [Principles](docs/01-principles.md) |
-| Commands to measure size / recover safely | [How to](docs/02-how-to.md) |
-| Weekly size check and habits | [Daily care](docs/03-daily-care.md) |
-| Full incident write-up (measurements, A/B, community) | [Full case study (EN)](docs/CASE_STUDY.md) · [完整中文原文](docs/zh/CASE_STUDY.md) |
+| Door | 门 | Go here |
+|------|----|---------|
+| Full case study | 完整案例 | [English](docs/CASE_STUDY.md) · [中文原文（勿删勿砍）](docs/zh/CASE_STUDY.md) |
+| Principles | 原理 | [docs/01-principles.md](docs/01-principles.md) |
+| How to | 怎么做 | [docs/02-how-to.md](docs/02-how-to.md) |
+| Daily care | 日常 | [docs/03-daily-care.md](docs/03-daily-care.md) |
 
-Do not delete or shorten the case-study files. See [docs/PRESERVE.md](docs/PRESERVE.md).
+**Tonight:** run [`./scripts/diagnose.sh`](scripts/diagnose.sh) (read-only) · read the full case · if the IDE is stuck and the DB is tens of GB, quit Cursor and follow emergency `mv` in [How to](docs/02-how-to.md) (prefer move over delete).
 
-## Guides and tools
+### Also / Tools
 
-| Doc | Role |
-|-----|------|
-| [docs/01-principles.md](docs/01-principles.md) | Mental model only |
-| [docs/02-how-to.md](docs/02-how-to.md) | Diagnose + emergency `mv` + GC order |
-| [docs/03-daily-care.md](docs/03-daily-care.md) | Weekly two-minute check |
-| [scripts/diagnose.sh](scripts/diagnose.sh) | One-shot read-only check |
-| [docs/AGENT_CONTEXT.md](docs/AGENT_CONTEXT.md) | Paste-ready context for a local Agent |
-| [docs/RELATED.md](docs/RELATED.md) | Related tools (inspiration, not copies) |
-| [docs/DIAGNOSTIC_COMMANDS.md](docs/DIAGNOSTIC_COMMANDS.md) | Short command checklist |
+- Read-only one-shot: [`scripts/diagnose.sh`](scripts/diagnose.sh)
+- Command reference: [docs/DIAGNOSTIC_COMMANDS.md](docs/DIAGNOSTIC_COMMANDS.md) (also linked from How to)
+- Agent paste context: [docs/AGENT_CONTEXT.md](docs/AGENT_CONTEXT.md)
+- Related tools (inspiration): [docs/RELATED.md](docs/RELATED.md)
+- Preserve rule: [docs/PRESERVE.md](docs/PRESERVE.md)
 
 ## Snapshot from the case
 
@@ -44,12 +40,6 @@ git clone https://github.com/Xuzhen-Li/cursor-state-vscdb.git
 cd cursor-state-vscdb
 ./scripts/diagnose.sh
 ```
-
-If the IDE is unusable and the DB is tens of GB, see emergency `mv` steps in [docs/02-how-to.md](docs/02-how-to.md). Prefer move over delete.
-
-## Figures
-
-Schematics and charts live under `figures/` (added in follow-up PRs). Guides reference them once previews land.
 
 ## License
 

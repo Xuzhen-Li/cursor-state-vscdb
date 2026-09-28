@@ -5,6 +5,8 @@
 
 Full story: [CASE_STUDY.md](CASE_STUDY.md). Commands only here.
 
+Command cheat sheet (same idea, longer list): [DIAGNOSTIC_COMMANDS.md](DIAGNOSTIC_COMMANDS.md).
+
 ## 0. Quit the IDE first (for moves / GC / VACUUM)
 
 ```bash
