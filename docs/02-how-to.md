@@ -1,5 +1,8 @@
 # How to: diagnose and recover (safely)
 
+> **Door:** How to · **Use when:** you need size checks, emergency recovery, or a safe GC order.  
+> **Not this page:** why symptoms look like the network → [01-principles.md](01-principles.md). Full story → [CASE_STUDY.md](CASE_STUDY.md).
+
 Full story: [CASE_STUDY.md](CASE_STUDY.md). Commands only here.
 
 ## 0. Quit the IDE first (for moves / GC / VACUUM)

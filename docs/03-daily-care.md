@@ -1,5 +1,8 @@
 # Daily / weekly care
 
+> **Door:** Daily care · **Use when:** you want a two-minute weekly habit so the DB never reaches tens of GB.  
+> **Not this page:** emergency recovery → [02-how-to.md](02-how-to.md). Full incident → [CASE_STUDY.md](CASE_STUDY.md).
+
 ## Weekly (two minutes)
 
 ```bash

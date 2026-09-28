@@ -2,18 +2,30 @@
 
 **Loading chats** / Agent hang after reboot can be a **local** SQLite problem: a multi-ten-GB `state.vscdb`, not (only) the network.
 
-This repository keeps the **full original case study intact** and adds short guides, a read-only diagnose script, and figures.
+This repository keeps the **full original case study intact** and adds short guides plus a read-only diagnose script.
 
-| Door | Go here |
-|------|---------|
-| Full incident write-up (English) | [docs/CASE_STUDY.md](docs/CASE_STUDY.md) |
-| **完整中文原文（勿删勿砍）** | [docs/zh/CASE_STUDY.md](docs/zh/CASE_STUDY.md) |
-| Why it behaves like a network outage | [docs/01-principles.md](docs/01-principles.md) |
-| What to run / how to recover | [docs/02-how-to.md](docs/02-how-to.md) |
-| Weekly habits | [docs/03-daily-care.md](docs/03-daily-care.md) |
-| One-shot read-only check | [scripts/diagnose.sh](scripts/diagnose.sh) |
-| Agent paste context | [docs/AGENT_CONTEXT.md](docs/AGENT_CONTEXT.md) |
-| Related tools (inspiration) | [docs/RELATED.md](docs/RELATED.md) |
+## In 3 minutes: which door?
+
+| You need… | Open |
+|-----------|------|
+| Why a local DB can look like a network outage | [Principles](docs/01-principles.md) |
+| Commands to measure size / recover safely | [How to](docs/02-how-to.md) |
+| Weekly size check and habits | [Daily care](docs/03-daily-care.md) |
+| Full incident write-up (measurements, A/B, community) | [Full case study (EN)](docs/CASE_STUDY.md) · [完整中文原文](docs/zh/CASE_STUDY.md) |
+
+Do not delete or shorten the case-study files. See [docs/PRESERVE.md](docs/PRESERVE.md).
+
+## Guides and tools
+
+| Doc | Role |
+|-----|------|
+| [docs/01-principles.md](docs/01-principles.md) | Mental model only |
+| [docs/02-how-to.md](docs/02-how-to.md) | Diagnose + emergency `mv` + GC order |
+| [docs/03-daily-care.md](docs/03-daily-care.md) | Weekly two-minute check |
+| [scripts/diagnose.sh](scripts/diagnose.sh) | One-shot read-only check |
+| [docs/AGENT_CONTEXT.md](docs/AGENT_CONTEXT.md) | Paste-ready context for a local Agent |
+| [docs/RELATED.md](docs/RELATED.md) | Related tools (inspiration, not copies) |
+| [docs/DIAGNOSTIC_COMMANDS.md](docs/DIAGNOSTIC_COMMANDS.md) | Short command checklist |
 
 ## Snapshot from the case
 

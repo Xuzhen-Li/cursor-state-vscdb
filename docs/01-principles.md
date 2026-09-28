@@ -1,5 +1,8 @@
 # Principles: why a local SQLite file can look like a network outage
 
+> **Door:** Principles · **Use when:** you want the mental model before touching files.  
+> **Not this page:** full measurements and A/B narrative → [CASE_STUDY.md](CASE_STUDY.md) / [zh/CASE_STUDY.md](zh/CASE_STUDY.md). Commands → [02-how-to.md](02-how-to.md).
+
 Keep the full incident narrative in [CASE_STUDY.md](CASE_STUDY.md) and [zh/CASE_STUDY.md](zh/CASE_STUDY.md). This page is the mental model only.
 
 ## What `state.vscdb` is
