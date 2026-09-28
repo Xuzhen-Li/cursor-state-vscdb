@@ -38,7 +38,11 @@ SQLite file size ≈ `page_count × page_size`. If `freelist_count` is tiny (her
 | Many relaunches fail, one works | Flaky server | Cache / init / lock timing on a huge DB |
 | After recovery everything is fast | “Fixed itself” | Luck + cache; size still abnormal |
 
-*Figure (TBD):* [figures/schematic/storage-layout/](../figures/schematic/storage-layout/) — where `state.vscdb` sits vs transcripts.
+**Figure — storage layout**
+
+![Storage layout: state.vscdb vs transcripts](../figures/schematic/storage-layout/preview.png)
+
+[Source folder](../figures/schematic/storage-layout/)
 
 ## A/B is the causal test
 

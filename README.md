@@ -41,6 +41,12 @@ cd cursor-state-vscdb
 ./scripts/diagnose.sh
 ```
 
+## Figures
+
+- [Storage layout](figures/schematic/storage-layout/preview.png) — `state.vscdb` vs transcripts
+- [Recovery flow](figures/schematic/recovery-flow/preview.png) — Path A keep DB / Path B `mv` bypass
+- Charts (size / KV shape): landing in follow-up PRs
+
 ## License
 
 MIT. Copyright (c) 2026 Xuzhen Li.

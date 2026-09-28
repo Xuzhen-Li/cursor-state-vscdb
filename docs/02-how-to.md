@@ -55,7 +55,11 @@ done
 
 Relaunch Cursor → new DB → New Chat → `hello`. Keep the backup until you decide you no longer need it.
 
-*Figure (TBD):* [figures/schematic/recovery-flow/](../figures/schematic/recovery-flow/) — quit → diagnose → export → GC → or `mv` aside.
+**Figure — recovery flow**
+
+![Recovery flow when Cursor is unusable](../figures/schematic/recovery-flow/preview.png)
+
+[Source folder](../figures/schematic/recovery-flow/)
 
 ## 3. Prefer keeping history
 
