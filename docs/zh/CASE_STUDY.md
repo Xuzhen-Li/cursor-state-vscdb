@@ -744,91 +744,135 @@ Agent 等待状态数据库
 
 ---
 
-## 十四、Cursor 自己提供了 `GC Agent KV Blobs`
+## 十四、实测：`Developer: GC Agent KV Blobs`（完整记录）
 
-在 Cursor Command Palette 中存在一个维护命令：
+社区支持此前建议用 Command Palette 里的：
 
 ```text
 Developer: GC Agent KV Blobs
 ```
 
-Cursor 社区支持人员建议使用它清理不再被聊天引用的 Agent KV blobs。
+清理不再被聊天引用的 Agent KV blobs。在 A/B 测试之后，我在本机真实跑了一次（Cursor **3.22.7**），并全程记录磁盘与 SQLite 指标。
 
-但是需要注意两个问题。
+重要前提：
 
-### 1. GC 不一定能清掉所有内容
+- 这是 Cursor 自带的 GC，**不是**手工 `DELETE FROM cursorDiskKV ...`
+- **不是**手动 `VACUUM`
+- 期望值要现实：GC 只清 orphan；仍被长 Chat 引用的 live 数据不会被删掉
 
-如果数据已经没有任何 Chat 引用：
-
-```text
-orphaned KV blobs
-```
-
-GC 可以回收。
-
-但如果几十 GB 数据仍然被某几个超长 Chat 认为是：
+我没有先跑社区论坛里常见的官方顺序：
 
 ```text
-live
+Export → Developer: Delete Old Chats… → GC Agent KV Blobs → Cmd+Q
 ```
 
-那么 GC 不会删除它们。
-
-一个 96 GB 案例中，GC 最终只回收了大约 18%，原因正是大量 transcript copy 仍然属于 live data。
-
-所以：
-
-```text
-GC Agent KV Blobs
-```
-
-不是：
-
-```text
-一键把 52 GB 变成 500 MB
-```
-
-它是一个相对保守的垃圾回收工具。
+（见 [macOS globalStorage 61.1GB](https://forum.cursor.com/t/macos-globalstorage-61-1gb/171211) 等帖中的 staff 建议。）本机尚未实测 Delete Old Chats；下面所有数字都来自「只跑了一次 GC」的路径。
 
 ---
 
-## 十五、为什么 GC / VACUUM 需要很多额外磁盘空间？
+## 十五、GC 过程中：WAL 涨到与主库同量级
 
-对于几十 GB 的 SQLite 数据库，这一点非常重要。
+GC 进入 `Compacting Storage` 后持续 **超过 1 小时**。期间大致看到：
 
-Cursor 社区支持人员解释过，数据库 compact 过程中可能需要写出接近完整的新数据库副本，所以额外空间需求可能接近数据库本身体积，极端情况下接近两倍。
+| 指标 | 过程中观察到的量级 |
+|------|-------------------|
+| `state.vscdb-wal` | 几 MB → 31G → 45G → **≈52G**，随后 checkpoint → **≈4.3 MB** |
+| APFS 可用空间 | 约 32 → **18** → 66 → 69 → 122 GiB |
+| CPU | 约 91% → 97% → 70% → 4% → 0.2% |
 
-社区里已经有人：
+要点：
+
+1. **WAL 峰值可以接近主库体积（≈52 GB）**。盘上只剩十几 GiB 时硬跑 GC / compact，风险和社区 30 GB Disk Full 案例同类，甚至更糟。
+2. 过程中可用空间一度掉到约 **18 GiB**，随后又回升。其中有一次：APFS free 从约 18 跳到约 **66 GiB**，而 WAL 当时仍约 **52G**——更像 purgeable / 系统回收的表现，**不能**据此断定 Cursor 已经释放了 48 GB 主库数据。
+3. checkpoint 之后 WAL 回到几 MB；主文件 `state.vscdb` 仍约 **52 GB**。
+
+---
+
+## 十六、GC 之后：真正回收了多少？
+
+以 SQLite 页面为准（比「感觉磁盘变大了」可靠）：
+
+| 指标 | GC 前 | GC 后 | 变化 |
+|------|-------|-------|------|
+| ItemTable | 976 | 985 | +9 |
+| cursorDiskKV | 2,731,416 | **2,731,751** | **+335** |
+| composerHeaders | 1,048 | 1,048 | 0 |
+| page_count | 13,551,257 | **13,520,717** | **−30,540** |
+| freelist_count | 2,208 | **186** | −2,022 |
+
+换算：
 
 ```text
-state.vscdb = 30 GB
+−30,540 pages × 4096
+≈ 119.3 MiB
+≈ 主库的 0.23%
 ```
 
-即使额外清出了几十 GB，依然在：
+结论非常明确：
 
-```text
-Compacting Storage
-```
+> 一次 GC Agent KV Blobs **没有**把 52 GB 变成「可用的小库」。页面大约只少了 **119 MiB**；`cursorDiskKV` 行数甚至略增；freelist 更紧（186 pages ≈ 762 KB）。
 
-阶段遇到 Disk Full。
+Cursor 日志里还有一句值得记：reference walk 期间显示类似 **0 deleted（16 errors）**。即便如此，`page_count` 的下降仍是真实的——**以 `page_count` 为真相**，不要被「0 deleted」文案带偏。
 
-因此：
+在 freelist 已经很紧、live 数据仍主导的前提下，**盲目再跑第二次 GC 没有意义**。
 
-> 不要在磁盘只剩几 GB 时对一个几十 GB 的 `state.vscdb` 运行 VACUUM 或 GC compact。
+---
 
-尤其不要直接执行：
+## 十七、key 类型：约 98.4% 是 bubble / agentKv / checkpoint
+
+GC 后对 `cursorDiskKV` 做了前缀计数（**只计行数，尚未按字节称重**）：
+
+| 前缀 | 行数 | 约占 cursorDiskKV |
+|------|------|-------------------|
+| `bubbleId` | 2,029,436 | ≈74.29% |
+| `agentKv` | 653,694 | ≈23.93% |
+| `checkpointId` | 4,659 | ≈0.17% |
+| **三者合计** | **2,687,789 / 2,731,751** | **≈98.39%** |
+
+这说明：
+
+> 空间嫌疑高度集中在 Agent / Chat 相关的 KV 前缀上。
+
+但必须同时强调：
+
+- **行数 ≠ 字节数**。哪一类真正占几十 GB、哪几个 Chat 拥有这些字节，**还没测**。
+- 下一步只读 SQL（**尚未在本机跑完 / 结果未写入本文**）形态如下：
 
 ```sql
-VACUUM;
+SELECT
+  CASE
+    WHEN key LIKE 'bubbleId:%' THEN 'bubbleId'
+    WHEN key LIKE 'agentKv:%' THEN 'agentKv'
+    WHEN key LIKE 'checkpointId:%' THEN 'checkpointId'
+    WHEN key LIKE 'composerData:%' THEN 'composerData'
+    ELSE 'other'
+  END AS kind,
+  COUNT(*) AS n,
+  SUM(length(value)) AS bytes
+FROM cursorDiskKV
+GROUP BY 1
+ORDER BY bytes DESC;
 ```
 
-然后期待它原地缩小。
-
-SQLite 的 VACUUM 本质上需要重新构造数据库。
+在拿到 `SUM(length(value))` 和按 Chat/Composer 聚合之前，不要声称「已经找到最终根因字节归属」。
 
 ---
 
-## 十六、如果只是想马上恢复 Cursor，最安全的方法是什么？
+## 十八、明确不要做的事
+
+结合本次实测，再次强调：
+
+1. **不要** `DELETE FROM cursorDiskKV WHERE key LIKE 'bubbleId:%'` / `agentKv:%` / `checkpointId:%`
+2. **不要** `rm state.vscdb`（以及配套的 wal/shm）当作「清理」——需要紧急恢复时用 **`mv` 移开**，见下一节
+3. **不要**指望在 freelist 已接近空（本次 GC 后仅 186 pages）时，靠 `VACUUM` 把 52 GB「挤掉」——没有可回收空页，VACUUM 也变不出空间
+4. **不要**在 freelist 紧、live 数据仍主导时盲目再跑第二次 GC
+5. 官方顺序 **Export → Delete Old Chats… → GC → Cmd+Q** 仍建议优先尝试，但 **本机尚未实测 Delete Old Chats 的效果**，本文不编造结果
+
+第三方脚本若走「SQL DELETE 再 VACUUM」路径（例如部分 clean 工具 / gist），与本次结论冲突：在 chat history 仍有价值时，应视为高风险，而不是默认处方。
+
+---
+
+## 十九、如果只是想马上恢复 Cursor，最安全的方法是什么？
 
 如果：
 
@@ -836,7 +880,7 @@ SQLite 的 VACUUM 本质上需要重新构造数据库。
 Cursor 已经无法使用
 ```
 
-而数据库又几十 GB，可以采用我这次验证过的方法：
+而数据库又几十 GB，可以采用我这次 A/B **验证过**的方法：
 
 ### 第一步：完全退出 Cursor
 
@@ -868,31 +912,31 @@ state.vscdb-wal
 state.vscdb-shm
 ```
 
-到其他目录。
+到其他目录。例如：
 
-Cursor Community Forum 的支持回复实际上也给出了类似方案：如果数据库过大导致 compaction 无法完成，可以先完整退出 Cursor，把 oversized database 移走，让 Cursor 创建新的小数据库。
+```bash
+cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
+mkdir -p state-vscdb-backup
+for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
+    [ -e "$f" ] && mv "$f" state-vscdb-backup/
+done
+```
+
+Cursor Community Forum 的支持回复也给出过类似方案：compaction 失败或库过大时，完整退出后把 oversized DB **移走**，让 Cursor 创建新的小库。
 
 ### 第三步：重新打开 Cursor
 
-Cursor 会创建：
+Cursor 会创建新的 `state.vscdb`。本次实测：New Chat 输入 `hello` **秒回**。
 
-```text
-新的 state.vscdb
-```
+代价是：原来的本地 Chat history 索引可能不会直接显示在新数据库中。所以不要急着删除旧库。
 
-这样至少可以立即恢复工作。
-
-代价是：
-
-> 原来的本地 Chat history 索引可能不会直接显示在新数据库中。
-
-所以不要急着删除旧数据库。
+把旧库移回去之后，卡顿有时又会出现——说明问题可以是**间歇性**的，并不等于「库已经自愈」。
 
 ---
 
-## 十七、如果还想保留旧 Chat，处理顺序应该更保守
+## 二十、如果还想保留旧 Chat，更保守的顺序
 
-如果磁盘空间足够，我认为比较合理的顺序是：
+磁盘空间足够时，社区 staff 常见建议（**本机 Delete Old Chats 仍未测**）：
 
 ```text
 完整退出 Cursor
@@ -903,32 +947,22 @@ Cursor 会创建：
         ↓
 必要 Chat 使用 Export Chat
         ↓
+Developer: Delete Old Chats…   ← 本机尚未实测
+        ↓
 Developer: GC Agent KV Blobs
         ↓
 完全 Cmd+Q
         ↓
-重新检查 DB 大小和 Cursor 性能
+用 page_count / freelist / du 复核
 ```
 
-如果 GC 之后数据库依然几十 GB，那么问题很可能不只是 orphaned data。
+注意本次实测：在 **未** Delete Old Chats 的前提下，单独 GC 只回收约 **119 MiB**，且 WAL 峰值可≈主库。跑 GC 前请预留接近主库体积的空闲空间。
 
-Cursor 社区支持针对超大数据库给出的进一步思路是：
-
-```text
-Export 重要 Chat
-        ↓
-删除异常巨大的长 Chat
-        ↓
-GC Agent KV Blobs
-        ↓
-完全退出 Cursor
-```
-
-因为某些非常长、经历大量 Agent self-fork 的聊天，本身可能就是几十 GB live data 的来源。
+若 GC 后库仍几十 GB，问题很可能是 **live** Agent/Chat KV，而不是 orphan 空壳。
 
 ---
 
-## 十八、不建议直接手工删除这些 SQL 记录
+## 二十一、不建议直接手工删除这些 SQL 记录
 
 网上可以找到类似：
 
@@ -945,118 +979,91 @@ WHERE key LIKE 'checkpointId:%';
 VACUUM;
 ```
 
-这种操作确实可能瞬间解决磁盘问题。
-
-但风险同样非常明显：
+这种操作确实可能瞬间「解决」磁盘问题，但风险同样非常明显：
 
 > 它可能直接破坏或者删除旧 Agent Chat 所需要的数据。
 
-已经有 Cursor 用户明确报告过通过这类方式缩小数据库，但同时丢失聊天。
+已经有用户报告过类似路径缩小数据库但同时丢失聊天。本次 key 分布又显示这三类合计约 **98.4%** 行——盲删几乎等于掏空 Agent 状态。
 
-所以如果 Chat history 有价值：
+如果 Chat history 有价值：
 
 > 不应该把暴力 SQL DELETE 当第一方案。
 
 ---
 
-## 十九、这次排查得到的完整证据链
-
-最终可以把整个过程浓缩成下面这条链：
+## 二十二、这次排查得到的完整证据链（含 GC 实测）
 
 ```text
 Mac 重启
     ↓
-Cursor Loading Chats
-    ↓
-Agent 发消息一直转圈
+Cursor Loading Chats / Agent 转圈（可间歇恢复）
     ↓
 最初怀疑网络 / HTTP2 / Cursor 服务
     ↓
-检查本地 globalStorage
+globalStorage → state.vscdb ≈ 52 GB
     ↓
-发现 state.vscdb = 52 GB
+page_count 13,551,257 / freelist 2,208
     ↓
-SQLite 有 13,551,257 pages
+证明 52 GB 基本不是空闲页虚胖
     ↓
-freelist 只有 2208 pages
+ItemTable 976 / max value ~759 KB
     ↓
-证明 52 GB 基本不是空闲页造成的虚胖
+cursorDiskKV 2,731,416 → 主嫌疑
     ↓
-ItemTable 只有 976 rows
+agent-transcripts 1015 个 / ~/.cursor/projects ≈ 728 MB
     ↓
-最大 value < 1 MB
+mv 旧 DB → 新 DB → hello 秒回
     ↓
-cursorDiskKV = 2,731,416 rows
+恢复旧 DB → 有时又快（间歇）
     ↓
-成为主要嫌疑
+Developer: GC Agent KV Blobs（>1h）
     ↓
-~/.cursor/projects 中仍有
-1015 个 Agent transcript
-总大小仅 728 MB
+WAL 峰值 ≈52G；可用曾低至 ≈18 GiB
     ↓
-说明 52 GB 不能简单用“聊天很多”解释
+page_count −30,540 ≈ 119.3 MiB；freelist → 186
     ↓
-移动旧 state.vscdb
+cursorDiskKV 行数略增；主文件仍 ≈52 GB
     ↓
-Cursor 自动建立新 DB
+bubbleId+agentKv+checkpointId ≈ 98.39% 行
     ↓
-New Chat → hello
-    ↓
-秒回
+字节级归属与 Delete Old Chats 效果：待测
 ```
-
-对我而言，最后这个 A/B 实验是最关键的。
 
 ---
 
-## 二十、目前我的判断
+## 二十三、目前我的判断
 
-这次问题并不是传统意义上的：
-
-```text
-Cursor 安装坏了
-```
-
-也不像单纯：
-
-```text
-网络连不上 Cursor API
-```
+这次问题并不是传统意义上的「Cursor 安装坏了」，也不像单纯「网络连不上 Cursor API」。
 
 更加符合：
 
-> **Cursor 本地 Agent / Composer 状态数据长期积累，使 `state.vscdb` 和 `cursorDiskKV` 膨胀到异常规模，最终在某些冷启动、历史恢复或者 Agent 初始化路径上造成严重性能问题。**
+> **本地 Agent / Composer 状态长期积累，使 `state.vscdb` / `cursorDiskKV` 膨胀到异常规模；与 Loading chats / Agent 卡死高度相关。GC 实测表明当前库以 live KV 为主，单次 orphan GC 只能回收约 0.23% 页面。**
 
-对于我的机器来说：
+对本机（Cursor **3.22.7**）：
 
 ```text
-state.vscdb
-≈ 52 GB
-
-cursorDiskKV
-≈ 273 万条
-
-composerHeaders
-≈ 1048 条
-
-agent transcript
-≈ 1015 个 / 728 MB
+state.vscdb          ≈ 52 GB（GC 后主文件仍约此量级）
+cursorDiskKV         2,731,416 → 2,731,751
+page_count           13,551,257 → 13,520,717（≈ −119.3 MiB）
+freelist_count       2,208 → 186
+key 前缀（行数）      bubbleId / agentKv / checkpointId ≈ 98.4%
+agent transcripts    ≈ 1015 / 728 MB
 ```
 
-而一个干净的 DB 可以立即让 Cursor 恢复秒回。
+同日稍后：启动仍会扫描约 **903** 个 agent headers；extension 进程曾被强制退出一次——与「库仍然巨大」一致，**并不推翻**上面的 `page_count` 记录。
 
-因此至少在这个案例里：
+因此至少在本案例里：
 
-> 当 Cursor 出现 `Loading chats`、Agent 无限转圈，并且反复重启偶尔又突然恢复时，除了网络之外，非常值得检查 `state.vscdb`。
+> 当出现 Loading chats、Agent 无限转圈、反复重启偶尔又突然恢复时，除了网络之外，非常值得检查 `state.vscdb`。强关联 + live Agent/Chat KV 主导，可以成立；字节级最终根因归属仍待 `SUM(length(value))` 与按 Chat 聚合。
 
 ---
 
-## 二十一、建议的日常监控方法
+## 二十四、建议的日常监控方法
 
 以后我会偶尔运行：
 
 ```bash
-du -h "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+du -h "$HOME/Library/Application Support/Cursor/User/globalStorage/"state.vscdb*
 ```
 
 同时看看：
@@ -1064,110 +1071,64 @@ du -h "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
 ```bash
 sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
 "SELECT COUNT(*) FROM cursorDiskKV;"
+
+sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
+"PRAGMA page_size; PRAGMA page_count; PRAGMA freelist_count;"
 ```
 
-如果出现：
+如果出现「几 GB → 十几 GB → 几十 GB」的快速增长，就应该尽早处理。
 
-```text
-几 GB
-→ 十几 GB
-→ 几十 GB
-```
+准备跑 GC / compact 时，额外记住一句：
 
-的快速增长，就应该尽早处理，而不是等它增长到 50 GB 以后再排查。
+> **预留接近主库体积的空闲磁盘**（本次 WAL 峰值 ≈ 主库）。盘只剩十几 GiB 时不要硬跑。
 
-对于长期 Agent 工作流，我也会尽量避免无限延长同一个 Chat。
-
-根据 Cursor 社区支持人员对 96 GB 案例的分析，某些长 Chat 中反复的 Agent self-fork 可能复制完整 transcript；新建 Chat 或采用不会复制父 transcript 的工作方式，可以避免这种增长模式持续放大。
+长期 Agent 工作流尽量避免无限延长同一个 Chat；社区对超大库的分析里，self-fork / 完整 transcript 副本是常见增长模式。
 
 ---
 
-## 二十二、一个安全细节：不要把 API Key 发到网上
+## 二十五、一个安全细节：不要把 API Key 发到网上
 
-在排查过程中，我运行过：
-
-```bash
-ps aux | grep -i "[C]ursor"
-```
-
-Cursor Agent worker 的进程参数中可能包含：
+排查时 `ps aux | grep -i "[C]ursor"` 的输出里，Agent worker 参数可能包含：
 
 ```text
 --api-key ...
 ```
 
-所以如果准备把终端输出发到：
+发到 GitHub / Forum / Blog / Reddit 前，务必打码：
 
 ```text
-GitHub
-Cursor Forum
-Blog
-Reddit
+API key / token / 用户名 / 项目私有路径
 ```
 
-一定要先把：
-
-```text
-API key
-token
-用户名
-项目私有路径
-```
-
-全部打码。
-
-如果已经公开过完整 token，最好重新登录 Cursor 或刷新相关凭证，而不是继续使用旧 token。
+路径一律写成 `/Users/<USER>/`、`<PROJECT>`；永远不要粘贴 `crsr_…` 一类凭证。若已公开过完整 token，应重新登录或轮换凭证。
 
 ---
 
 ## 总结
 
-这次排查最让我意外的并不是 Cursor 有一个 52 GB 的 SQLite 数据库。
-
-而是：
+这次排查最让我意外的，并不是 Cursor 有一个 52 GB 的 SQLite 文件，而是：
 
 > 一个本地数据库问题，可以表现得如此像网络问题。
 
-它的表现不是简单的：
+表现不是简单的「启动慢」，而是 Loading chats、Agent 不回复、连续重启无效、某一次突然恢复、恢复以后又异常流畅——以及后来证实的**间歇性**。
 
-```text
-Cursor 启动慢
-```
-
-而是：
-
-```text
-Loading chats
-Agent 不回复
-连续重启无效
-某一次突然恢复
-恢复以后又异常流畅
-```
-
-如果只盯着：
-
-```text
-网络
-代理
-模型
-Cursor API
-```
-
-很容易一直排错方向。
-
-最终真正让我确定方向的是：
+最终真正让我确定方向，并被 GC 实测加固的是：
 
 ```text
 52 GB state.vscdb
 +
-273 万 cursorDiskKV
+273 万级 cursorDiskKV
 +
-几乎为零的 SQLite freelist
+几乎为零的 SQLite freelist（GC 后更紧）
 +
 全新 DB 后 Agent 秒回
++
+单次 GC 仅 ≈119 MiB / ≈0.23% 页面
++
+≈98.4% 行落在 bubbleId / agentKv / checkpointId
 ```
 
-如果以后有人遇到类似问题，我认为第一批值得检查的命令就是：
+第一批值得检查的命令：
 
 ```bash
 du -h "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
@@ -1179,16 +1140,16 @@ sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb
 "PRAGMA page_size; PRAGMA page_count; PRAGMA freelist_count;"
 ```
 
-这几条命令可能比反复重装 Cursor 有用得多。
+这几条可能比反复重装 Cursor 有用得多。
 
 ---
 
 ## 附录：我准备直接交给 Cursor Agent 的自修复上下文
 
-下面这段可以直接复制给 Cursor，让它在本机继续分析。
+下面这段可以直接复制给 Cursor，让它在本机继续**只读**分析。也见英文精简版 [AGENT_CONTEXT.md](../AGENT_CONTEXT.md)。
 
 ```text
-我正在排查 Cursor 自己的本地状态数据库异常，请基于以下已经确认的信息继续分析和修复，不要从头猜测网络问题。
+我正在排查 Cursor 自己的本地状态数据库异常，请基于以下已经确认的信息继续分析，不要从头猜测网络问题。
 
 【故障表现】
 
@@ -1196,7 +1157,12 @@ Mac 重启之后：
 1. Cursor 可以启动，但 Chat 长时间显示 Loading chats。
 2. 即使 Chat UI 加载出来，New Chat 输入 hello 也一直转圈，没有回复。
 3. 多次强制退出重新启动后，某一次曾突然完全恢复，之后加载很快。
-4. 目前 Cursor 又可以正常快速启动和使用，但旧数据库仍然异常巨大，所以不要认为问题已经永久消失。
+4. A/B：移开旧 DB → 新 DB → hello 秒回；恢复旧 DB 后卡顿可间歇再现。
+5. 不要因为某次又变快，就认为 52 GB 库已经永久修好。
+
+【版本】
+
+Cursor 约 3.22.7（本机实测 GC 时）。
 
 【已经确认的 Cursor 本地数据库】
 
@@ -1204,139 +1170,79 @@ Mac 重启之后：
 
 ~/Library/Application Support/Cursor/User/globalStorage/state.vscdb
 
-曾检查到：
+GC 前曾检查到：
 
 state.vscdb      ≈ 52 GB
 globalStorage    ≈ 58 GB
 workspaceStorage ≈ 294 MB
 Cursor Cache     ≈ 41 MB
 
-SQLite 表：
+SQLite 表：ItemTable / cursorDiskKV / composerHeaders
 
-ItemTable
-cursorDiskKV
-composerHeaders
+GC 前行数：ItemTable=976；cursorDiskKV=2,731,416；composerHeaders=1,048
+GC 后行数：ItemTable=985；cursorDiskKV=2,731,751；composerHeaders=1,048
 
-记录数量：
+cursorDiskKV schema：key TEXT，value BLOB
 
-ItemTable          = 976
-cursorDiskKV        = 2,731,416
-composerHeaders     = 1,048
+GC 前页面：page_size=4096；page_count=13,551,257；freelist_count=2,208
+→ 总页面约 51.69 GiB；freelist 约 8.6 MiB（≈0.016%）。不是空壳虚胖。
 
-cursorDiskKV schema：
+GC 后页面：page_count=13,520,717（−30,540 ≈ 119.3 MiB ≈ 0.23%）；freelist_count=186（≈762 KB）。
+主文件仍约 52 GB。日志可见 0 deleted（16 errors）；以 page_count 为准。
 
-key   TEXT
-value BLOB
-
-SQLite 页面：
-
-page_size      = 4096
-page_count     = 13,551,257
-freelist_count = 2,208
-
-计算：
-
-总页面约 51.69 GiB。
-
-freelist 只有约 8.6 MiB，约占整个数据库 0.016%。
-
-因此 52 GB 并不是单纯 SQLite 删除数据后没有 VACUUM 造成的空文件膨胀；绝大部分页面实际处于使用状态。
-
-【ItemTable 检查结果】
-
-ItemTable 最大的单条 value 只有约 759 KB。
-
-因此 ItemTable 不可能解释 52 GB。
-
-主要嫌疑是 cursorDiskKV 的 273 万条 BLOB。
+ItemTable 最大 value ≈759 KB → 不能解释 52 GB。
 
 【Agent transcript】
 
-~/.cursor/projects 中：
+~/.cursor/projects 中 agent-transcripts/*.jsonl ≈ 1015 个；整个 projects 目录 ≈728 MB（与 52 GB DB 差约 70 倍）。
 
-agent-transcripts/*.jsonl = 1015 个
+【GC 过程】
 
-整个：
+Developer: GC Agent KV Blobs，Compacting Storage >1h。
+WAL：几 MB → ≈52G → checkpoint 后 ≈4.3MB。
+可用磁盘曾低至 ≈18 GiB；APFS free 曾在 WAL 仍大时从 ≈18 跳到 ≈66 GiB（更像系统 purgeable，不能当成 Cursor 释放了 48GB 主库）。
+CPU 高负载后回落。
 
-~/.cursor/projects
+【key 前缀（GC 后，仅行数）】
 
-只有约：
+bubbleId 2,029,436（≈74.29%）
+agentKv 653,694（≈23.93%）
+checkpointId 4,659（≈0.17%）
+合计 ≈98.39% of 2,731,751
+字节 GiB / 按 Chat 归属：尚未测量。
 
-728 MB
+【同日后续】
 
-所以 Agent transcript 文件总量与 52 GB state.vscdb 相差约 70 倍。
+启动仍扫描约 903 agent headers；extension 曾 force-quit——与巨大 DB 一致，不推翻 page_count。
 
-不要假设 52 GB 单纯是因为正常聊天内容很多。
+【禁止】
 
-【最关键的 A/B 测试】
-
-我曾：
-
-1. 完全 Cmd+Q 退出 Cursor。
-2. 把 state.vscdb / state.vscdb-wal / state.vscdb-shm 移出 globalStorage。
-3. 保留旧数据库，没有删除。
-4. 重新启动 Cursor，让 Cursor 创建一个新的 state.vscdb。
-5. New Chat 输入 hello。
-
-结果：
-
-立即回复，Cursor 完全恢复正常。
-
-所以旧 state.vscdb / cursorDiskKV 与 Loading Chats 和 Agent 卡死高度相关。
-
-随后我又恢复了旧数据库。目前 Cursor 暂时也能够快速启动和正常使用。
-
-因此问题可能具有 cache / initialization / long-chat state / KV lookup 等状态依赖，但 52 GB DB 本身仍然需要处理。
-
-【已经知道的同类问题】
-
-Cursor Community Forum 中已经存在 state.vscdb 增长到：
-
-30 GB
-42 GB
-96 GB
-
-的案例。
-
-其中 cursorDiskKV 会出现大量：
-
-bubbleId
-agentKv
-checkpointId
-
-相关数据。
-
-Cursor 社区支持人员还提到某些 Agent self-fork / resume:self 场景可能产生完整 transcript copy，导致少数长 Chat 占据大量数据库空间。
+不要 DELETE bubbleId/agentKv/checkpointId；
+不要 rm state.vscdb；
+不要在 freelist 已空时幻想 VACUUM 能缩小；
+不要盲目第二次 GC；
+官方 Export→Delete Old Chats→GC→Cmd+Q 顺序本机尚未测 Delete Old Chats，勿编造结果。
 
 【你的任务】
 
-请首先只进行分析，不要直接破坏性删除数据。
+只读分析优先：
+1. 跑 SUM(length(value)) 按 key 前缀称重（可能很慢）。
+2. 尽量映射到占用最大的 composer/chat。
+3. 在用户确认前，不要破坏性删除。
+4. 所有写/移库前确保 Cursor 已完全退出；compact 前确认空闲盘 ≈ 主库量级。
 
-目标：
-
-1. 找出 52 GB state.vscdb 中 cursorDiskKV 的 key 类型分布。
-2. 统计 bubbleId、agentKv、checkpointId、composerData 等 key 的数量和大致空间占用。
-3. 判断是否是少数 Composer / Chat 导致绝大多数数据。
-4. 尽可能建立 composer/chat ID 与 cursorDiskKV 数据量之间的对应关系。
-5. 优先使用 Cursor 自己支持的 GC Agent KV Blobs 或其他官方维护机制。
-6. 如果必须删除 Chat，先识别占用最大的 Chat，并让我选择。
-7. 保留 ~/.cursor/projects/agent-transcripts 下已有的 1015 个 transcript。
-8. 不要直接执行：
-   DELETE FROM cursorDiskKV ...
-   rm state.vscdb
-   VACUUM
-   除非已经明确说明影响并获得确认。
-9. 所有数据库操作前确保 Cursor 已完全退出。
-10. 如果 compact / VACUUM，需要先确认剩余磁盘空间足够。
-11. 不要破坏当前仍可正常启动的 Cursor 状态。
-
-请先输出：
-A. 当前数据库诊断方案；
-B. 准备执行的只读 SQL；
-C. 根据结果如何识别占空间最大的 Chat；
-D. 最安全的清理路线。
-
-未经确认不要执行破坏性删除。
+先输出：A 诊断方案；B 只读 SQL；C 如何找最重 Chat；D 最安全清理路线。
 ```
 
 这就是目前完整的排查上下文。
+
+---
+
+## 备忘：对话入口和第三方工具
+
+- **Delete Old Chats…**：论坛 staff 常把它放在 GC 之前；**本机尚未实测**其删除量与后续 GC 回收量，本文不给出虚构数字。
+- 相关论坛（含 52GB 量级与官方顺序讨论）：见 [RELATED.md](../RELATED.md)，尤其是 [macOS globalStorage 61.1GB](https://forum.cursor.com/t/macos-globalstorage-61-1gb/171211)。
+- 第三方清理工具备忘（灵感 / 对照，不是本仓处方）：
+  - [vilaca/cursor-chat-cleaner](https://github.com/vilaca/cursor-chat-cleaner)
+  - [zhengchenliang/cursor-clean](https://github.com/zhengchenliang/cursor-clean) 以及部分 gist：常见路径是 **SQL DELETE 再 VACUUM**——与本文「勿盲删 bubble/agentKv/checkpoint」冲突，chat 仍有价值时请警惕。
+- **Colima**：同机 `~/.colima` 下约有 **30GB** 量级占用，与 Cursor `state.vscdb` **无关**；仅作磁盘记账备忘，避免排障时张冠李戴。

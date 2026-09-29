@@ -26,11 +26,14 @@ This repository keeps the **full original case study intact** and adds short gui
 ## Snapshot from the case
 
 ```text
-state.vscdb           ≈ 52 GB
-cursorDiskKV          ≈ 2,731,416 rows
-freelist              ≈ 8.6 MB (~0.016%)
-agent-transcripts     ≈ 1015 files / ~728 MB
-A/B: move old DB aside → fresh DB → New Chat "hello" ≈ instant
+state.vscdb           ≈ 52 GB (Cursor 3.22.7)
+cursorDiskKV          2,731,416 → 2,731,751 after GC
+freelist              2,208 → 186 pages post-GC
+A/B: move old DB aside → fresh DB → hello ≈ instant (restore intermittent)
+GC Agent KV Blobs     >1h; WAL peak ≈52 GB; free dipped ≈18 GiB
+page reclaim          ≈119 MiB (≈0.23%); main file still ≈52 GB
+key rows              ≈98.4% bubbleId / agentKv / checkpointId
+agent-transcripts     ≈1015 files / ~728 MB
 ```
 
 ## Quick start

@@ -17,7 +17,7 @@ Watch for jumps: a few GB → teens → tens of GB.
 1. **Prefer new chats** for new tasks instead of one eternal Agent thread (self-fork / resume can copy large transcripts).
 2. **Export** anything you might need later before mass cleanup.
 3. Run **GC Agent KV Blobs** after deleting large chats, then fully quit.
-4. Do not leave the machine on a nearly full disk if you plan compact / VACUUM.
+4. Do not leave the machine on a nearly full disk if you plan compact / VACUUM — **reserve ~main-DB free space** (WAL during GC can ≈ `state.vscdb`).
 5. Keep `~/.cursor/projects/**/agent-transcripts` as a secondary copy — still not a full UI index.
 
 ## What “healthy enough” looks like

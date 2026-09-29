@@ -70,11 +70,31 @@ Relaunch Cursor → new DB → New Chat → `hello`. Keep the backup until you d
 ```text
 Quit → confirm agent-transcripts exist
   → Export Chat for anything precious
+  → Developer: Delete Old Chats…   (staff order; untested locally here)
   → Command Palette: Developer: GC Agent KV Blobs
-  → Quit again → re-run diagnose.sh
+  → Quit again → re-run diagnose.sh (trust page_count)
 ```
 
-If still huge: export → delete a few monster long chats → GC → quit. Prefer that over raw SQL `DELETE` + `VACUUM`.
+Measured: GC alone on a ~52 GB DB ran **>1h**, WAL peaked **≈ DB size**, free dipped ~**18 GiB**, reclaimed only ~**119 MiB**. Do **not** blind-run a second GC while freelist is already tiny and live KV dominates.
+
+If still huge: export → Delete Old Chats / remove a few monster long chats → GC → quit. Prefer that over raw SQL `DELETE` + `VACUUM`.
+
+Weighing bytes (slow; optional; **results not claimed in the case until run**):
+
+```sql
+SELECT
+  CASE
+    WHEN key LIKE 'bubbleId:%' THEN 'bubbleId'
+    WHEN key LIKE 'agentKv:%' THEN 'agentKv'
+    WHEN key LIKE 'checkpointId:%' THEN 'checkpointId'
+    ELSE 'other'
+  END AS kind,
+  COUNT(*) AS n,
+  SUM(length(value)) AS bytes
+FROM cursorDiskKV
+GROUP BY 1
+ORDER BY bytes DESC;
+```
 
 ## 4. Do not start here
 
@@ -90,7 +110,7 @@ Do this only after an explicit impact discussion and a backup.
 
 ## 5. Free disk before compact
 
-Need roughly DB-sized free space (plan for up to ~2×). If compact hits Disk Full mid-way, you can worsen the outage.
+Need roughly DB-sized free space (plan for up to ~2×). **Measured:** WAL during GC peaked ≈ **main `state.vscdb` size (~52 GB)** while free dipped to ~18 GiB. If compact hits Disk Full mid-way, you can worsen the outage.
 
 ## 6. Redact secrets
 
