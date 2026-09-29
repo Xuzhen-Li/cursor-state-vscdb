@@ -6,6 +6,7 @@ Official forum reports that match oversized `state.vscdb` / `cursorDiskKV`, Load
 
 | Thread | Why it matters here |
 |--------|---------------------|
+| [macOS globalStorage 61.1GB](https://forum.cursor.com/t/macos-globalstorage-61-1gb/171211) | 52GB-class; staff order **Export → Delete Old Chats → GC → Cmd+Q**; compaction / free-disk pressure |
 | [Best practices with state.vscdb and state.vscdb.backup](https://forum.cursor.com/t/best-practices-with-state-vscdb-and-state-vscdb-backup-in-cursor/156848) | Known unbounded `cursorDiskKV`; VACUUM / SQL cleanup caveats; Loading Chat risk |
 | [State.vscdb grew from 3.1 GB → 97 GB (macOS)](https://forum.cursor.com/t/state-vscdb-grew-from-3-1-gb-97-gb-macos/166013) | Extreme growth; staff: prefer Delete Old Chats / GC, do not delete/rename DB lightly; transcripts ≪ SQLite |
 | [macOS: 12.4 GB state.vscdb + 12.2 GB backup](https://forum.cursor.com/t/macos-state-vscdb-grew-to-12-4-gb-and-state-vscdb-backup-grew-to-12-2-gb-on-a-256-gb-macbook-air-seeking-safe-remediation-guidance/162623) | `cursorDiskKV` dominates; safe `state.vscdb.backup` reclaim; GC guidance |
@@ -24,7 +25,8 @@ We studied public READMEs and rewrote our own guides/scripts. Links for credit a
 
 | Project | Useful idea |
 |---------|-------------|
-| [zhengchenliang/cursor-clean](https://github.com/zhengchenliang/cursor-clean) | Layered diagnose → configure → clean → repair; quit before DB ops |
+| [zhengchenliang/cursor-clean](https://github.com/zhengchenliang/cursor-clean) | Layered diagnose → clean → repair; quit before DB ops — some paths / related gists **SQL DELETE then VACUUM** (caution if history matters) |
+| [vilaca/cursor-chat-cleaner](https://github.com/vilaca/cursor-chat-cleaner) | Chat-oriented cleanup UI — review before destructive use |
 | [Miks221/cursor-db-slim](https://github.com/Miks221/cursor-db-slim) | Estimate / dry-run before apply; timestamped backups |
 | [shaun3141/CursorData-SDK](https://github.com/shaun3141/CursorData-SDK) | Structured view of `cursorDiskKV` |
 | [MushroomSquad/cursor-export](https://github.com/MushroomSquad/cursor-export) | Export composer chats before destructive recovery |
@@ -33,4 +35,4 @@ We studied public READMEs and rewrote our own guides/scripts. Links for credit a
 | [456wyc/cursor-flash](https://github.com/456wyc/cursor-flash) | Inspect / reclaim `state.vscdb` space |
 | [Aiweline/codex-cursor-cleaner](https://github.com/Aiweline/codex-cursor-cleaner) | Broader clean of oversized local AI DBs |
 
-This repo’s case numbers (52 GB, 2.73M rows, freelist 2208, A/B hello) are from the author’s machine — see [CASE_STUDY.md](CASE_STUDY.md) / [zh/CASE_STUDY.md](zh/CASE_STUDY.md).
+This repo’s case numbers (52 GB; 2.73M `cursorDiskKV` rows; freelist 2208→186; A/B hello; **GC >1h with WAL peak ≈52 GB** reclaiming ~119 MiB; ~98.4% bubble/agentKv/checkpoint rows) are from the author’s machine (Cursor 3.22.7) — see [CASE_STUDY.md](CASE_STUDY.md) / [zh/CASE_STUDY.md](zh/CASE_STUDY.md).

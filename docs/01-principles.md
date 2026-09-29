@@ -50,7 +50,11 @@ Same Mac, network, install, account, project — only swap the DB file. If a fre
 
 ## GC is not a magic shrink
 
-`Developer: GC Agent KV Blobs` removes **orphaned** KV. Live data still referenced by long / self-forked chats stays. Compaction can need free disk on the order of the DB size (sometimes approaching 2×). Do not `VACUUM` a tens-of-GB DB on a nearly full disk.
+`Developer: GC Agent KV Blobs` removes **orphaned** KV. Live data still referenced by long / self-forked chats stays.
+
+Measured on this 52 GB case (Cursor 3.22.7): GC ran **>1h**, WAL peaked near the **main DB size (~52 GB)**, free disk dipped to ~**18 GiB**, and `page_count` fell only ~**119 MiB** (~0.23%). Freelist ended at **186** pages. With live data dominating and freelist empty-ish, **`VACUUM` will not shrink the file**, and a blind second GC is pointless.
+
+**Rows ≠ bytes.** ~98.4% of `cursorDiskKV` *rows* were `bubbleId` / `agentKv` / `checkpointId` after GC; byte GiB per class was not measured yet. Do not `VACUUM` a tens-of-GB DB on a nearly full disk — plan free space ≈ DB size because WAL can ≈ main file.
 
 ## Borrowed ideas
 

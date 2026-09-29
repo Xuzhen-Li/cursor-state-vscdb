@@ -228,40 +228,152 @@ After proving the new DB works, restoring the old DB again started quickly. That
 
 ---
 
-## 14. `Developer: GC Agent KV Blobs`
+## 14. Measured run: `Developer: GC Agent KV Blobs`
 
-Official-ish maintenance for orphaned Agent KV. Orphans can go; live data referenced by huge chats stays. A 96 GB case reportedly reclaimed only ~18% because most copies were still live. GC is not “52 GB → 500 MB” in one click.
+After the A/B test I ran Cursor’s own maintenance command (not hand-written `DELETE`, not manual `VACUUM`) on **Cursor 3.22.7**:
+
+```text
+Developer: GC Agent KV Blobs
+```
+
+I did **not** first run the staff-suggested order often cited on the forum:
+
+```text
+Export → Developer: Delete Old Chats… → GC Agent KV Blobs → Cmd+Q
+```
+
+(See e.g. [macOS globalStorage 61.1GB](https://forum.cursor.com/t/macos-globalstorage-61-1gb/171211).) **Delete Old Chats is still untested on this machine.** Every number below is from a **GC-only** path.
+
+GC removes **orphaned** Agent KV. Live data still referenced by long chats stays. It is not “52 GB → 500 MB in one click.”
 
 ---
 
-## 15. GC / VACUUM need lots of free disk
+## 15. During GC: WAL can match the main DB size
 
-Compaction may rewrite nearly a full DB copy (sometimes approaching 2× free space). Community reports of Disk Full during “Compacting Storage” on ~30 GB DBs. Do not `VACUUM` a tens-of-GB DB when the disk is almost full.
+`Compacting Storage` ran for **more than one hour**. Observed ranges:
+
+| Signal | During the run |
+|--------|----------------|
+| `state.vscdb-wal` | few MB → 31G → 45G → **≈52G**, then checkpoint → **≈4.3 MB** |
+| APFS free space | ~32 → **18** → 66 → 69 → 122 GiB |
+| CPU | ~91% → 97% → 70% → 4% → 0.2% |
+
+Takeaways:
+
+1. **WAL peak can ≈ main DB size (~52 GB).** Running GC/compact with only teens of GiB free is the same risk class as community Disk Full reports on ~30 GB DBs.
+2. Free space once dipped to ~**18 GiB**, then rose again. At one point APFS free jumped ~18 → ~**66 GiB** while WAL was still ~**52G** — consistent with purgeable / system reclaim, **not** proof that Cursor had freed 48 GB of main-file data.
+3. After checkpoint, WAL returned to a few MB; the main `state.vscdb` file stayed ~**52 GB**.
 
 ---
 
-## 16. Fastest safe recovery if Cursor is unusable
+## 16. After GC: how much was actually reclaimed?
 
-1. Quit fully (`Cmd+Q`); confirm no IDE processes.
-2. **Move** `state.vscdb` + `-wal` + `-shm` aside (not delete).
-3. Relaunch so Cursor creates a small DB and you can work.
+Trust SQLite pages over “the disk felt bigger”:
+
+| Metric | Pre-GC | Post-GC | Δ |
+|--------|--------|---------|---|
+| ItemTable | 976 | 985 | +9 |
+| cursorDiskKV | 2,731,416 | **2,731,751** | **+335** |
+| composerHeaders | 1,048 | 1,048 | 0 |
+| page_count | 13,551,257 | **13,520,717** | **−30,540** |
+| freelist_count | 2,208 | **186** | −2,022 |
+
+```text
+−30,540 pages × 4096 ≈ 119.3 MiB ≈ 0.23% of the DB
+```
+
+So: one GC Agent KV Blobs run **did not** turn a 52 GB library into a small one. Pages fell by ~**119 MiB**; `cursorDiskKV` row count slightly **rose**; freelist got tighter (186 pages ≈ 762 KB).
+
+Cursor logs noted something like **0 deleted (16 errors)** during the reference walk. The `page_count` drop is still real — **treat `page_count` as ground truth**, not the “0 deleted” phrasing alone.
+
+With freelist this tight and live data dominating, a **blind second GC is pointless**.
+
+---
+
+## 17. Key classes: ~98.4% bubble / agentKv / checkpoint (row counts)
+
+Post-GC prefix counts (**rows only; byte GiB per class not measured yet**):
+
+| Prefix | Rows | Share of cursorDiskKV |
+|--------|------|------------------------|
+| `bubbleId` | 2,029,436 | ≈74.29% |
+| `agentKv` | 653,694 | ≈23.93% |
+| `checkpointId` | 4,659 | ≈0.17% |
+| **Sum** | **2,687,789 / 2,731,751** | **≈98.39%** |
+
+Strong association with Agent/Chat KV prefixes. But **rows ≠ bytes**. Which class owns tens of GiB, and which chats own those bytes, is **still unknown**.
+
+Planned read-only weighing SQL (**not run / results not claimed here**):
+
+```sql
+SELECT
+  CASE
+    WHEN key LIKE 'bubbleId:%' THEN 'bubbleId'
+    WHEN key LIKE 'agentKv:%' THEN 'agentKv'
+    WHEN key LIKE 'checkpointId:%' THEN 'checkpointId'
+    WHEN key LIKE 'composerData:%' THEN 'composerData'
+    ELSE 'other'
+  END AS kind,
+  COUNT(*) AS n,
+  SUM(length(value)) AS bytes
+FROM cursorDiskKV
+GROUP BY 1
+ORDER BY bytes DESC;
+```
+
+Until `SUM(length(value))` and per-chat aggregation exist, do not claim a final byte-level root cause.
+
+---
+
+## 18. Explicit do-nots
+
+1. Do **not** `DELETE` `bubbleId` / `agentKv` / `checkpointId` keys.
+2. Do **not** `rm state.vscdb` as “cleanup” — emergency recovery uses **`mv` aside** (next section).
+3. Do **not** expect `VACUUM` to shrink when freelist is already empty-ish (186 pages here).
+4. Do **not** blind-run a second GC while freelist is tight and live data dominates.
+5. Prefer staff order **Export → Delete Old Chats… → GC → Cmd+Q**, but **Delete Old Chats remains untested locally** — this write-up invents no results for it.
+
+Peer tools / gists that **SQL DELETE then VACUUM** conflict with this case when history still matters — treat as high risk, not a default prescription.
+
+---
+
+## 19. Fastest safe recovery if Cursor is unusable
+
+1. Quit fully (`Cmd+Q`); confirm no IDE processes (`ps` — ignore `CursorUIViewService`).
+2. **Move** (do not delete) `state.vscdb` + `-wal` + `-shm` aside:
+
+```bash
+cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
+mkdir -p state-vscdb-backup
+for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
+  [ -e "$f" ] && mv "$f" state-vscdb-backup/
+done
+```
+
+3. Relaunch → fresh DB → New Chat → `hello` → **near-instant** (measured).
 4. Keep the backup; old chat index may not appear in the new DB.
 
+Restoring the old file can bring the hang back **only intermittently** — same stateful / cache / init dependence as before. Fast start ≠ healed DB.
+
 ---
 
-## 17. If you still want old chats
+## 20. If you still want old chats (conservative order)
+
+Staff-shaped path (**Delete Old Chats untested here**):
 
 ```text
 Quit → keep old DB → confirm agent-transcripts
   → Export Chat for anything important
-  → GC Agent KV Blobs → Quit → re-check size/performance
+  → Developer: Delete Old Chats…   ← not measured locally
+  → Developer: GC Agent KV Blobs
+  → Quit → re-check page_count / freelist / du
 ```
 
-If still huge: Export → delete a few monster long chats → GC → Quit.
+This measured GC (without Delete Old Chats) reclaimed only ~**119 MiB**, while WAL peak ≈ main DB. Reserve ~DB-sized free disk before compact. If still tens of GB afterward, suspect **live** Agent/Chat KV, not orphan empty-shell fat.
 
 ---
 
-## 18. Avoid blind SQL DELETE
+## 21. Avoid blind SQL DELETE
 
 ```sql
 DELETE FROM cursorDiskKV WHERE key LIKE 'agentKv:%';
@@ -269,54 +381,84 @@ DELETE FROM cursorDiskKV WHERE key LIKE 'agentKv:%';
 VACUUM;
 ```
 
-May free disk and destroy chat data. Users have reported loss. Not a first option if history matters.
+May free disk and destroy chat data. Users have reported loss. With ~**98.4%** of rows in those three prefixes, blind delete ≈ gutting Agent state. Not a first option if history matters.
 
 ---
 
-## 19. Evidence chain
+## 22. Evidence chain (including measured GC)
 
 ```text
-Mac reboot → Loading chats → Agent spin
+Mac reboot → Loading chats → Agent spin (intermittent recovery)
 → blamed network/HTTP2/service
-→ globalStorage → state.vscdb = 52 GB
-→ 13,551,257 pages / freelist 2208 → real data, not empty freelist
-→ ItemTable 976 / max value < 1 MB
-→ cursorDiskKV 2,731,416 → main suspect
-→ 1015 transcripts / 728 MB → not “chat volume alone”
-→ move old DB → new DB → hello instant
+→ state.vscdb ≈ 52 GB
+→ page_count 13,551,257 / freelist 2,208 → real data
+→ ItemTable 976 / max ~759 KB
+→ cursorDiskKV 2,731,416
+→ 1015 transcripts / 728 MB
+→ mv old DB → new DB → hello instant
+→ restore old DB → sometimes fast again (intermittent)
+→ GC Agent KV Blobs (>1h)
+→ WAL peak ≈52G; free dipped to ≈18 GiB
+→ page_count −30,540 ≈ 119.3 MiB; freelist → 186
+→ cursorDiskKV rows +335; main file still ≈52 GB
+→ bubbleId+agentKv+checkpointId ≈ 98.39% of rows
+→ byte GiB / Delete Old Chats: not measured yet
 ```
 
 ---
 
-## 20. Judgment
+## 23. Judgment
 
-Not “install corrupted” and not “API unreachable only.” Better fit: local Agent/Composer state accumulated until `state.vscdb` / `cursorDiskKV` reached abnormal scale and hurt cold start / history restore / Agent init. A clean DB restored instant replies. When you see Loading chats + Agent spin + intermittent recovery after reboot, check `state.vscdb` as well as the network.
+Not “install corrupted” and not “API unreachable only.” Better fit:
+
+> Local Agent/Composer state accumulated until `state.vscdb` / `cursorDiskKV` reached abnormal scale and is **strongly associated** with Loading chats / Agent hang. Measured GC shows the DB is still dominated by **live** KV; one orphan GC reclaimed ~0.23% of pages.
+
+On this machine (Cursor **3.22.7**):
+
+```text
+state.vscdb        ≈ 52 GB (main file still ~that after GC)
+cursorDiskKV       2,731,416 → 2,731,751
+page_count         13,551,257 → 13,520,717 (≈ −119.3 MiB)
+freelist_count     2,208 → 186
+key prefixes       bubbleId / agentKv / checkpointId ≈ 98.4% of rows
+agent transcripts  ≈ 1015 / 728 MB
+```
+
+Same day later: startup still scanned ~**903** agent headers; extension process force-quit once — consistent with a still-huge DB; **does not overturn** the page counts.
+
+Strong association + live Agent/Chat KV dominance is fair. Final byte-level attribution waits on `SUM(length(value))` and per-chat aggregation.
 
 ---
 
-## 21. Daily monitoring
+## 24. Daily monitoring
 
 ```bash
-du -h "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+du -h "$HOME/Library/Application Support/Cursor/User/globalStorage/"state.vscdb*
 sqlite3 ".../state.vscdb" "SELECT COUNT(*) FROM cursorDiskKV;"
+sqlite3 ".../state.vscdb" "PRAGMA page_size; PRAGMA page_count; PRAGMA freelist_count;"
 ```
 
-Act when size climbs through multi-GB into tens of GB. Prefer new chats over one endless self-forking thread.
+Act when size climbs through multi-GB into tens of GB. Before GC/compact: **reserve free disk on the order of the main DB** (WAL peak ≈ DB here). Prefer new chats over one endless self-forking thread.
 
 ---
 
-## 22. Redact API keys
+## 25. Redact API keys
 
-`ps` may show `--api-key`. Redact before posting. Rotate credentials if you already leaked a token.
+`ps` may show `--api-key`. Redact `/Users/<USER>/`, `<PROJECT>`, never paste `crsr_…` or raw tokens. Rotate if already leaked.
 
 ---
 
 ## Summary
 
-The surprise was not “Cursor has a 52 GB SQLite file.” It was how much a **local DB** can look like a **network** failure: Loading chats, Agent silence, many failed relaunches, sudden fast recovery. The chain that settled direction:
+The surprise was not “Cursor has a 52 GB SQLite file.” It was how much a **local DB** can look like a **network** failure — including intermittent recovery. The chain that settled direction, reinforced by GC measurement:
 
 ```text
-52 GB state.vscdb + 2.73M cursorDiskKV + near-zero freelist + fresh DB → instant hello
+52 GB state.vscdb
++ ~2.73M cursorDiskKV
++ near-zero freelist (tighter after GC)
++ fresh DB → instant hello
++ one GC ≈ 119 MiB / 0.23% pages
++ ≈98.4% rows in bubbleId / agentKv / checkpointId
 ```
 
 First commands worth running:
@@ -333,4 +475,15 @@ sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb
 
 ## Appendix: paste-ready Agent context
 
-See also [AGENT_CONTEXT.md](AGENT_CONTEXT.md). The full Chinese appendix block is preserved verbatim in [zh/CASE_STUDY.md](zh/CASE_STUDY.md).
+See [AGENT_CONTEXT.md](AGENT_CONTEXT.md) (updated with post-GC numbers). The full Chinese appendix block, including the measured GC facts, is in [zh/CASE_STUDY.md](zh/CASE_STUDY.md).
+
+---
+
+## Memo: chat entry points and third-party tools
+
+- **Delete Old Chats…** is often placed before GC in staff replies; **not measured locally** — no invented reclaim numbers here.
+- Forum peers (including 52GB-class + staff order): [RELATED.md](RELATED.md), especially [macOS globalStorage 61.1GB](https://forum.cursor.com/t/macos-globalstorage-61-1gb/171211).
+- Third-party cleaners (memo only, not this repo’s prescription):
+  - [vilaca/cursor-chat-cleaner](https://github.com/vilaca/cursor-chat-cleaner)
+  - [zhengchenliang/cursor-clean](https://github.com/zhengchenliang/cursor-clean) and some gists: often **SQL DELETE then VACUUM** — conflicts with “do not blind-delete bubble/agentKv/checkpoint” when history matters.
+- **Colima**: ~30GB under `~/.colima` on the same Mac is **unrelated** to Cursor `state.vscdb` — disk-accounting memo only.
