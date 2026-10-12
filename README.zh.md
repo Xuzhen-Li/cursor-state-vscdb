@@ -4,7 +4,7 @@
 
 ## 概述
 
-本仓库提供只读诊断脚本、操作指南和完整案例分析，用于排查因 `state.vscdb` 本地 SQLite 数据库体积过大导致的 macOS Cursor IDE 卡死问题。重启后聊天加载或 Agent 卡死可能是一个本地 SQLite 问题，而不仅仅是网络故障。
+本仓库完整保留原始案例，并提供只读诊断脚本和操作指南，用于排查因 `state.vscdb` 本地 SQLite 数据库体积过大导致的 macOS Cursor IDE 卡死问题。重启后聊天加载或 Agent 卡死可能是一个本地 SQLite 问题，而不仅仅是网络故障。
 
 ## 第一步
 
@@ -46,7 +46,7 @@ cd cursor-state-vscdb
 ## 图表
 
 - [Storage layout](figures/schematic/storage-layout/preview.png)：`state.vscdb` 对比 transcripts
-- [Recovery flow](figures/schematic/recovery-flow/preview.png)：退出，`mv` 移走，全新数据库
+- [Recovery flow](figures/schematic/recovery-flow/preview.png)：退出，`mv` 移走，全新数据库（可选 Export/GC）
 - [Size compare](figures/charts/size-compare/preview.png)：数据库对比 transcripts、workspace、cache（对数坐标）
 - [KV shape](figures/charts/kv-shape/preview.png)：表行数数量级（对数坐标）
 

@@ -4,7 +4,7 @@
 
 ## Overview
 
-This repository provides a read-only diagnosis script, guides, and a case study for macOS Cursor IDE hangs caused by large `state.vscdb` SQLite databases. Loading chats or Agent hangs after a reboot can be a local SQLite issue rather than just a network problem.
+This repository keeps the full original case study intact and provides a read-only diagnosis script and guides for macOS Cursor IDE hangs caused by large `state.vscdb` SQLite databases. Loading chats or Agent hangs after a reboot can be a local SQLite issue rather than just a network problem.
 
 ## First steps
 
@@ -46,7 +46,7 @@ cd cursor-state-vscdb
 ## Figures
 
 - [Storage layout](figures/schematic/storage-layout/preview.png): `state.vscdb` vs transcripts
-- [Recovery flow](figures/schematic/recovery-flow/preview.png): quit, `mv` aside, fresh DB
+- [Recovery flow](figures/schematic/recovery-flow/preview.png): quit, `mv` aside, fresh DB (optional Export/GC)
 - [Size compare](figures/charts/size-compare/preview.png): DB vs transcripts, workspace, cache (log scale)
 - [KV shape](figures/charts/kv-shape/preview.png): table row magnitudes (log scale)
 
