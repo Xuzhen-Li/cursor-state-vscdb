@@ -1,29 +1,28 @@
 # cursor-state-vscdb
 
-**Loading chats** / Agent hang after reboot can be a **local** SQLite problem: a tens-of-GB `state.vscdb`, not only a network problem. Paths and scripts below target **macOS Cursor**.
+[中文](README.zh.md)
 
-This repository keeps the **full original case study intact** and adds short guides, a read-only diagnose script, and figures.
+## Overview
 
-## In 3 minutes: which door?
+This repository provides a read-only diagnosis script, guides, and a case study for macOS Cursor IDE hangs caused by large `state.vscdb` SQLite databases. Loading chats or Agent hangs after a reboot can be a local SQLite issue rather than just a network problem.
 
-| Door | 门 | Go here |
-|------|----|---------|
-| Full case study | 完整案例 | [English](docs/CASE_STUDY.md) · [中文原文（勿删勿砍）](docs/zh/CASE_STUDY.md) |
-| Principles | 原理 | [docs/01-principles.md](docs/01-principles.md) |
-| How to | 怎么做 | [docs/02-how-to.md](docs/02-how-to.md) |
-| Daily care | 日常 | [docs/03-daily-care.md](docs/03-daily-care.md) |
+## First steps
 
-**Tonight:** run [`./scripts/diagnose.sh`](scripts/diagnose.sh) (read-only) · read the full case · if the IDE is stuck and the DB is tens of GB, quit Cursor and follow emergency `mv` in [How to](docs/02-how-to.md) (prefer move over delete).
+Run [`./scripts/diagnose.sh`](scripts/diagnose.sh) (read-only); read the full case; if the IDE is stuck and the DB is tens of GB, quit Cursor and follow the emergency `mv` in [How to](docs/02-how-to.md) (prefer move over delete).
 
-### Also / Tools
+## Documentation
 
-- Read-only one-shot: [`scripts/diagnose.sh`](scripts/diagnose.sh)
-- Command reference: [docs/DIAGNOSTIC_COMMANDS.md](docs/DIAGNOSTIC_COMMANDS.md) (also linked from How to)
+- Full case study: [English](docs/CASE_STUDY.md) and [中文原文（勿删勿砍）](docs/zh/CASE_STUDY.md)
+- Principles: [docs/01-principles.md](docs/01-principles.md)
+- How to: [docs/02-how-to.md](docs/02-how-to.md)
+- Daily care: [docs/03-daily-care.md](docs/03-daily-care.md)
+- Read-only diagnose script: [`scripts/diagnose.sh`](scripts/diagnose.sh)
+- Command reference: [docs/DIAGNOSTIC_COMMANDS.md](docs/DIAGNOSTIC_COMMANDS.md)
 - Agent paste context: [docs/AGENT_CONTEXT.md](docs/AGENT_CONTEXT.md)
-- Forum peers + tools: [docs/RELATED.md](docs/RELATED.md)
+- Forum peers and tools: [docs/RELATED.md](docs/RELATED.md)
 - Preserve rule: [docs/PRESERVE.md](docs/PRESERVE.md)
 
-## Snapshot from the case
+## Snapshot
 
 ```text
 state.vscdb           ≈ 52 GB (Cursor 3.22.7)
@@ -36,7 +35,7 @@ key rows              ≈98.4% bubbleId / agentKv / checkpointId
 agent-transcripts     ≈1015 files / ~728 MB
 ```
 
-## Quick start
+## Usage
 
 ```bash
 git clone https://github.com/Xuzhen-Li/cursor-state-vscdb.git
@@ -46,10 +45,10 @@ cd cursor-state-vscdb
 
 ## Figures
 
-- [Storage layout](figures/schematic/storage-layout/preview.png) — `state.vscdb` vs transcripts
-- [Recovery flow](figures/schematic/recovery-flow/preview.png) — quit → mv aside → fresh DB (optional Export/GC)
-- [Size compare](figures/charts/size-compare/preview.png) — DB vs transcripts / workspace / cache (log scale)
-- [KV shape](figures/charts/kv-shape/preview.png) — table row magnitudes (log scale)
+- [Storage layout](figures/schematic/storage-layout/preview.png): `state.vscdb` vs transcripts
+- [Recovery flow](figures/schematic/recovery-flow/preview.png): quit, `mv` aside, fresh DB
+- [Size compare](figures/charts/size-compare/preview.png): DB vs transcripts, workspace, cache (log scale)
+- [KV shape](figures/charts/kv-shape/preview.png): table row magnitudes (log scale)
 
 ## License
 
