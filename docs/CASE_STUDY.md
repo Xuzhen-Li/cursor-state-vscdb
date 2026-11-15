@@ -212,6 +212,8 @@ for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
 done
 ```
 
+This is the command as it was run at the time. To do this yourself, use the version in [02-how-to.md](02-how-to.md) §2, which cannot overwrite an earlier backup.
+
 Relaunch → new DB → New Chat → `hello` → **near-instant**. Unchanged: Mac, network, install, account, model, project. Changed: old 52 GB DB → new DB. Strongest causal evidence in this investigation.
 
 ---
@@ -343,12 +345,26 @@ Peer tools / gists that **SQL DELETE then VACUUM** conflict with this case when 
 2. **Move** (do not delete) `state.vscdb` + `-wal` + `-shm` aside:
 
 ```bash
-cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
-mkdir -p state-vscdb-backup
-for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
-  [ -e "$f" ] && mv "$f" state-vscdb-backup/
-done
+if ! cd "$HOME/Library/Application Support/Cursor/User/globalStorage"; then
+  echo "Could not open the globalStorage folder, so nothing was moved." >&2
+  false
+elif [ ! -e state.vscdb ]; then
+  echo "No state.vscdb in this folder, so nothing was moved." >&2
+  false
+else
+  BACKUP="state-vscdb-backup-$(date +%Y%m%d-%H%M%S)"
+  if mkdir "$BACKUP"; then
+    for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
+      if [ -e "$f" ]; then mv -n "$f" "$BACKUP"/; fi
+    done
+  else
+    echo "Could not create $BACKUP, so nothing was moved." >&2
+    false
+  fi
+fi
 ```
+
+The backup folder gets the date and time in its name, `mkdir` without `-p` stops if it already exists, and `mv -n` never replaces a file, so running this twice cannot overwrite an earlier backup. If the globalStorage folder cannot be opened, `state.vscdb` is not there, or the backup folder cannot be created, it says nothing was moved and returns an error.
 
 3. Relaunch → fresh DB → New Chat → `hello` → **near-instant** (measured).
 4. Keep the backup; old chat index may not appear in the new DB.

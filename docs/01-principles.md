@@ -5,11 +5,15 @@
 
 ## What `state.vscdb` is
 
-Cursor (VS Code / Electron lineage) stores long-lived UI and Agent state in SQLite under:
+Cursor (built on VS Code and Electron) keeps UI and Agent state in a SQLite file:
 
 ```text
-~/Library/Application Support/Cursor/User/globalStorage/state.vscdb
+macOS:   ~/Library/Application Support/Cursor/User/globalStorage/state.vscdb
+Linux:   ~/.config/Cursor/User/globalStorage/state.vscdb
+Windows: %APPDATA%\Cursor\User\globalStorage\state.vscdb
 ```
+
+(Linux and Windows paths: Cursor staff answer on forum.cursor.com, topic 124271.)
 
 Typical tables in this case:
 
