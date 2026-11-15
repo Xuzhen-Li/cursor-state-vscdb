@@ -921,7 +921,7 @@ cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
 BACKUP="state-vscdb-backup-$(date +%Y%m%d-%H%M%S)"
 if mkdir "$BACKUP"; then
     for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
-        [ -e "$f" ] && mv -n "$f" "$BACKUP"/
+        if [ -e "$f" ]; then mv -n "$f" "$BACKUP"/; fi
     done
 else
     echo "无法创建 $BACKUP，没有移动任何文件。" >&2
