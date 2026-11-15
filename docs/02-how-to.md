@@ -1,11 +1,8 @@
 # How to: diagnose and recover (safely)
 
-> **Door:** How to · **Use when:** you need size checks, emergency recovery, or a safe GC order.  
-> **Not this page:** why symptoms look like the network → [01-principles.md](01-principles.md). Full story → [CASE_STUDY.md](CASE_STUDY.md).
+Use this page to check the size of `state.vscdb`, get Cursor working again, and clean up in a safe order. Why the symptoms look like a network fault is in [01-principles.md](01-principles.md); the full story is in [CASE_STUDY.md](CASE_STUDY.md); a longer command list is in [DIAGNOSTIC_COMMANDS.md](DIAGNOSTIC_COMMANDS.md).
 
-Full story: [CASE_STUDY.md](CASE_STUDY.md). Commands only here.
-
-Command cheat sheet (same idea, longer list): [DIAGNOSTIC_COMMANDS.md](DIAGNOSTIC_COMMANDS.md).
+The paths below are the macOS ones. On Linux the folder is `~/.config/Cursor/User/globalStorage/`; on Windows it is `%APPDATA%\Cursor\User\globalStorage\`.
 
 ## 0. Quit the IDE first (for moves / GC / VACUUM)
 
@@ -14,13 +11,13 @@ Command cheat sheet (same idea, longer list): [DIAGNOSTIC_COMMANDS.md](DIAGNOSTI
 ps aux | grep -i "[C]ursor"
 ```
 
-Ignore macOS `CursorUIViewService`. No Cursor IDE / Electron workers should remain.
+`CursorUIViewService` is a macOS service and can stay. No other Cursor or Electron process should be left.
 
 ## 1. Read-only diagnose
 
 ```bash
 cd /path/to/cursor-state-vscdb   # clone root
-./scripts/diagnose.sh           # macOS default; Linux: CURSOR_STATE_DB=... ./scripts/diagnose.sh
+./scripts/diagnose.sh           # finds the file on macOS and Linux; elsewhere: CURSOR_STATE_DB=/path/state.vscdb ./scripts/diagnose.sh
 # or:
 du -h "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
 sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
@@ -29,16 +26,16 @@ sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb
   "PRAGMA page_size; PRAGMA page_count; PRAGMA freelist_count;"
 ```
 
-Rough thresholds (heuristic, not official):
+Rough size guide (my own rule of thumb, not from Cursor):
 
 | `state.vscdb` | Action |
 |---------------|--------|
 | &lt; 2 GB | Monitor |
-| 2–10 GB | Export important chats; consider GC; avoid endless single chats |
-| 10–30 GB | Plan cleanup soon; free disk before compact |
-| &gt; 30 GB | Treat as incident; prefer move-aside recovery if IDE is unusable |
+| 2–10 GB | Export chats you need; think about GC; start new chats instead of growing one forever |
+| 10–30 GB | Clean up soon; free disk space before any compact |
+| &gt; 30 GB | Treat it as an incident; if Cursor is unusable, move the file aside (section 2) |
 
-**Figure — relative sizes (case illustration)**
+Figure: relative sizes in this case
 
 ![Relative size of stored components](../figures/charts/size-compare/preview.png)
 
@@ -46,7 +43,7 @@ Rough thresholds (heuristic, not official):
 
 ## 2. Emergency: work again now (`mv`, never `rm`)
 
-STOP: Quit Cursor first. This moves `state.vscdb` aside (never `rm`) so a fresh DB can start.
+Quit Cursor first. These commands move `state.vscdb` into a dated backup folder (they do not delete it), so Cursor starts with a new file.
 
 ```bash
 cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
@@ -57,9 +54,9 @@ for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
 done
 ```
 
-Relaunch Cursor → new DB → New Chat → `hello`. Keep the backup until you decide you no longer need it.
+Start Cursor, open a New Chat and send `hello`. Keep the backup folder until you are sure you do not need anything in it.
 
-**Figure — recovery flow**
+Figure: recovery flow
 
 ![Recovery flow when Cursor is unusable](../figures/schematic/recovery-flow/preview.png)
 
@@ -75,11 +72,11 @@ Quit → confirm agent-transcripts exist
   → Quit again → re-run diagnose.sh (trust page_count)
 ```
 
-Measured: GC alone on a ~52 GB DB ran **>1h**, WAL peaked **≈ DB size**, free dipped ~**18 GiB**, reclaimed only ~**119 MiB**. Do **not** blind-run a second GC while freelist is already tiny and live KV dominates.
+What I measured: GC alone on the ~52 GB file ran for over an hour, the WAL file grew to about the size of the DB, free disk fell to ~18 GiB, and only ~119 MiB came back. If the freelist is already small and most rows are still in use, a second GC will not help.
 
-If still huge: export → Delete Old Chats / remove a few monster long chats → GC → quit. Prefer that over raw SQL `DELETE` + `VACUUM`.
+If the file is still huge: export what you need, delete old chats or the few very long ones, run GC, quit. That is safer than deleting rows with SQL and running `VACUUM`.
 
-Weighing bytes (slow; optional; **results not claimed in the case until run**):
+To see which kind of row takes the bytes (slow, optional; I have not run this on the 52 GB file, so the case has no numbers for it):
 
 ```sql
 SELECT
@@ -98,7 +95,7 @@ ORDER BY bytes DESC;
 
 ## 4. Do not start here
 
-STOP: Do not run this first — users report chat loss; only after backup and an explicit impact discussion.
+Do not start with this. Users report losing chats this way.
 
 ```sql
 DELETE FROM cursorDiskKV WHERE key LIKE 'agentKv:%';
@@ -106,16 +103,16 @@ DELETE FROM cursorDiskKV WHERE key LIKE 'agentKv:%';
 VACUUM;
 ```
 
-Do this only after an explicit impact discussion and a backup.
+Only consider it after you have a backup and know what you will lose.
 
 ## 5. Free disk before compact
 
-Need roughly DB-sized free space (plan for up to ~2×). **Measured:** WAL during GC peaked ≈ **main `state.vscdb` size (~52 GB)** while free dipped to ~18 GiB. If compact hits Disk Full mid-way, you can worsen the outage.
+You need free disk about the size of the DB, and up to twice that to be safe. In this case the WAL during GC reached about the size of `state.vscdb` (~52 GB) and free disk fell to ~18 GiB. If the disk fills up halfway through a compact, things get worse.
 
 ## 6. Redact secrets
 
-`ps` lines may contain `--api-key`. Never paste raw process lists to GitHub / Reddit / forums.
+`ps` output can contain `--api-key` values. Do not paste raw process lists on GitHub, Reddit or forums.
 
 ## Forum peers
 
-Same-class reports and staff replies: [RELATED.md](RELATED.md) (Cursor Community Forum section).
+Similar reports and Cursor staff replies: [RELATED.md](RELATED.md) (Cursor Community Forum section).

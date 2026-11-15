@@ -3,13 +3,27 @@
 # Does not modify any files. Quit Cursor before trusting row counts if the app is writing.
 set -euo pipefail
 
-DB="${CURSOR_STATE_DB:-$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb}"
+# Default locations (Cursor staff, forum.cursor.com/t/124271):
+#   macOS:   ~/Library/Application Support/Cursor/User/globalStorage/state.vscdb
+#   Linux:   ~/.config/Cursor/User/globalStorage/state.vscdb
+#   Windows: %APPDATA%\Cursor\User\globalStorage\state.vscdb (set CURSOR_STATE_DB)
+case "$(uname -s)" in
+  Darwin) DEFAULT_DB="$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" ;;
+  Linux)  DEFAULT_DB="$HOME/.config/Cursor/User/globalStorage/state.vscdb" ;;
+  *)      DEFAULT_DB="" ;;
+esac
+DB="${CURSOR_STATE_DB:-$DEFAULT_DB}"
+if [[ -z "$DB" ]]; then
+  echo "Unknown system. Set CURSOR_STATE_DB to the full path of state.vscdb and run again."
+  exit 1
+fi
 GS="$(dirname "$DB")"
 
 echo "== path =="
 echo "$DB"
 if [[ ! -f "$DB" ]]; then
   echo "missing: state.vscdb"
+  echo "If Cursor keeps it somewhere else, run: CURSOR_STATE_DB=/full/path/state.vscdb $0"
   exit 1
 fi
 
@@ -26,11 +40,11 @@ fi
 
 echo
 echo "== tables =="
-sqlite3 "$DB" "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+sqlite3 -readonly "$DB" "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
 
 echo
 echo "== row counts =="
-sqlite3 -separator $'\t' "$DB" "
+sqlite3 -readonly -separator $'\t' "$DB" "
 SELECT 'ItemTable', COUNT(*) FROM ItemTable
 UNION ALL SELECT 'cursorDiskKV', COUNT(*) FROM cursorDiskKV
 UNION ALL SELECT 'composerHeaders', COUNT(*) FROM composerHeaders;
@@ -38,11 +52,11 @@ UNION ALL SELECT 'composerHeaders', COUNT(*) FROM composerHeaders;
 
 echo
 echo "== pages =="
-sqlite3 "$DB" "PRAGMA page_size; PRAGMA page_count; PRAGMA freelist_count;" 2>/dev/null || true
+sqlite3 -readonly "$DB" "PRAGMA page_size; PRAGMA page_count; PRAGMA freelist_count;" 2>/dev/null || true
 
 echo
 echo "== freelist fraction (approx) =="
-sqlite3 "$DB" "
+sqlite3 -readonly "$DB" "
 SELECT printf('pages=%s freelist=%s freelist_pct=%.4f',
   page_count, freelist_count,
   100.0 * freelist_count / CASE WHEN page_count=0 THEN 1 ELSE page_count END)

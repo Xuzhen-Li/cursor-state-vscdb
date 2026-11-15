@@ -6,8 +6,7 @@
 ## Weekly (two minutes)
 
 ```bash
-du -h "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
-./scripts/diagnose.sh | tee -a ~/cursor-state-diagnose.log
+./scripts/diagnose.sh   # prints the size too; works on macOS and Linux | tee -a ~/cursor-state-diagnose.log
 ```
 
 Watch for jumps: a few GB → teens → tens of GB.
