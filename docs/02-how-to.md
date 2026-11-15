@@ -20,9 +20,9 @@ cd /path/to/cursor-state-vscdb   # clone root
 ./scripts/diagnose.sh           # finds the file on macOS and Linux; elsewhere: CURSOR_STATE_DB=/path/state.vscdb ./scripts/diagnose.sh
 # or:
 du -h "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
-sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
+sqlite3 -readonly "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
   "SELECT COUNT(*) FROM cursorDiskKV;"
-sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
+sqlite3 -readonly "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
   "PRAGMA page_size; PRAGMA page_count; PRAGMA freelist_count;"
 ```
 
@@ -43,15 +43,16 @@ Figure: relative sizes in this case
 
 ## 2. Emergency: work again now (`mv`, never `rm`)
 
-Quit Cursor first. These commands move `state.vscdb` into a dated backup folder (they do not delete it), so Cursor starts with a new file.
+Quit Cursor first. These commands move `state.vscdb` into a new backup folder named with the date and time (they do not delete it), so Cursor starts with a new file. `mkdir` without `-p` stops if that folder already exists, and `mv -n` never replaces a file, so a second run cannot overwrite an earlier backup.
 
 ```bash
 cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
-BACKUP="state-vscdb-backup-$(date +%Y%m%d)"
-mkdir -p "$BACKUP"
-for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
-  [ -e "$f" ] && mv "$f" "$BACKUP"/
-done
+BACKUP="state-vscdb-backup-$(date +%Y%m%d-%H%M%S)"
+if mkdir "$BACKUP"; then
+  for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
+    [ -e "$f" ] && mv -n "$f" "$BACKUP"/
+  done
+fi
 ```
 
 Start Cursor, open a New Chat and send `hello`. Keep the backup folder until you are sure you do not need anything in it.

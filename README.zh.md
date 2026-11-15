@@ -14,15 +14,20 @@ cd cursor-state-vscdb
 ./scripts/diagnose.sh
 ```
 
-脚本只读不写，会打印文件大小、各表行数、页数和空闲页数。需要 `bash`；行数和页数还需要 `sqlite3` 命令（没有的话只显示大小）。
+脚本不会写数据库，会打印文件大小、各表行数、页数和空闲页数。需要 `bash`；行数和页数还需要 `sqlite3` 命令（没有的话只显示大小）。
 
-默认查找的位置：
+打开方式取决于 Cursor 是否在运行（脚本用 `pgrep` 判断；也可以设 `CURSOR_DIAG_OPEN=immutable` 或 `CURSOR_DIAG_OPEN=readonly` 自己指定）：
+
+- Cursor 已退出：以 `file:…?mode=ro&immutable=1` 打开，SQLite 不会新建附属文件。如果 Cursor 其实还在运行，读出的数字可能前后不一致。
+- Cursor 在运行：用 `sqlite3 -readonly` 打开。Cursor 的数据库是 WAL 模式，SQLite 可能在旁边新建或更新 `state.vscdb-wal` 和 `state.vscdb-shm`。
+
+文件通常的位置（macOS 和 Linux 上脚本默认找这里）：
 
 | 系统 | 路径 |
 |------|------|
 | macOS | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` |
 | Linux | `~/.config/Cursor/User/globalStorage/state.vscdb` |
-| Windows | `%APPDATA%\Cursor\User\globalStorage\state.vscdb`（在 Git Bash 或 WSL 里运行，并设置 `CURSOR_STATE_DB`） |
+| Windows | `%APPDATA%\Cursor\User\globalStorage\state.vscdb`（没有默认值，需设置 `CURSOR_STATE_DB`，WSL 下也一样） |
 
 文件在别处时：
 
@@ -30,7 +35,7 @@ cd cursor-state-vscdb
 CURSOR_STATE_DB=/完整路径/state.vscdb ./scripts/diagnose.sh
 ```
 
-Cursor 运行时会一直写这个文件，想要准确的行数请先退出 Cursor。
+Cursor 运行时会一直写这个文件。想要准确的数字、也不想产生附属文件，请先退出 Cursor。
 
 ## Cursor 现在就卡住了怎么办
 
@@ -42,7 +47,7 @@ Cursor 运行时会一直写这个文件，想要准确的行数请先退出 Cur
 state.vscdb           ≈ 52 GB (Cursor 3.22.7)
 cursorDiskKV 行数     2,731,416 → GC 后 2,731,751
 空闲页 freelist       2,208 → GC 后 186
-A/B 对照              移走旧库 → 新库 → hello 几乎立刻回复（放回旧库：时好时坏）
+A/B 对照              移走旧库 → 新库 → hello 几乎立刻回复（放回旧库：那次也很快启动；故障是间歇性的）
 GC Agent KV Blobs     超过 1 小时；WAL 峰值 ≈ 52 GB；剩余磁盘降到 ≈ 18 GiB
 回收空间              ≈ 119 MiB（≈ 0.23%）；文件仍 ≈ 52 GB
 行类型                ≈ 98.4% 的行是 bubbleId / agentKv / checkpointId

@@ -4,7 +4,7 @@
 
 After a reboot, Cursor on my Mac sat on "Loading chats" and the Agent would not answer a plain `hello`. It looked like a network problem. It was not: Cursor's local SQLite file, `state.vscdb`, had grown to about 52 GB. Moving that file aside and letting Cursor start a new one made `hello` come back at once.
 
-This repo has the full write-up of that case, a read-only script to check your own file, and the steps I used to get Cursor working again without losing the old data.
+This repo has the full write-up of that case, a script that checks your own file without writing to it, and the steps I used to get Cursor working again without losing the old data.
 
 ## Check your own file
 
@@ -14,15 +14,20 @@ cd cursor-state-vscdb
 ./scripts/diagnose.sh
 ```
 
-The script only reads. It prints the file size, table row counts, and page and freelist counts. It needs `bash`; the row and page counts also need the `sqlite3` command (without it you get the sizes only).
+The script never writes to the database. It prints the file size, table row counts, and page and freelist counts. It needs `bash`; the row and page counts also need the `sqlite3` command (without it you get the sizes only).
 
-Where it looks by default:
+How it opens the file depends on whether Cursor is running (it checks with `pgrep`; set `CURSOR_DIAG_OPEN=immutable` or `CURSOR_DIAG_OPEN=readonly` to choose yourself):
+
+- Cursor closed: it opens the file as `file:…?mode=ro&immutable=1`. SQLite then creates no side files. If Cursor is in fact running, the numbers may be inconsistent.
+- Cursor running: it uses `sqlite3 -readonly`. The Cursor database is in WAL mode, so SQLite may create or update `state.vscdb-wal` and `state.vscdb-shm` next to it.
+
+Where the file usually is (the script looks there by default on macOS and Linux):
 
 | System | Path |
 |--------|------|
 | macOS | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` |
 | Linux | `~/.config/Cursor/User/globalStorage/state.vscdb` |
-| Windows | `%APPDATA%\Cursor\User\globalStorage\state.vscdb` (run the script from Git Bash or WSL with `CURSOR_STATE_DB` set) |
+| Windows | `%APPDATA%\Cursor\User\globalStorage\state.vscdb` (no default: set `CURSOR_STATE_DB`, also under WSL) |
 
 For any other location:
 
@@ -30,7 +35,7 @@ For any other location:
 CURSOR_STATE_DB=/full/path/to/state.vscdb ./scripts/diagnose.sh
 ```
 
-Quit Cursor first if you want the row counts to be exact; Cursor writes to the file while it runs.
+Quit Cursor first if you want exact numbers and no side files; Cursor writes to the file while it runs.
 
 ## If Cursor is stuck right now
 
@@ -42,7 +47,7 @@ If the file is tens of GB and Cursor will not load chats, quit Cursor, then move
 state.vscdb           ≈ 52 GB (Cursor 3.22.7)
 cursorDiskKV rows     2,731,416 → 2,731,751 after GC
 freelist pages        2,208 → 186 after GC
-A/B test              old DB moved aside → new DB → hello ≈ instant (old DB put back: works only some of the time)
+A/B test              old DB moved aside → new DB → hello ≈ instant (old DB put back: also started fast that time; the failure comes and goes)
 GC Agent KV Blobs     over 1 h; WAL peaked ≈ 52 GB; free disk dropped to ≈ 18 GiB
 space given back      ≈ 119 MiB (≈ 0.23%); file still ≈ 52 GB
 row types             ≈ 98.4% of rows are bubbleId / agentKv / checkpointId

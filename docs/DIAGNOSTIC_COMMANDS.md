@@ -15,9 +15,9 @@ du -sh "$HOME/Library/Application Support/Cursor/User/workspaceStorage"
 ```bash
 DB="$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
 
-sqlite3 "$DB" "SELECT name FROM sqlite_master WHERE type='table';"
+sqlite3 -readonly "$DB" "SELECT name FROM sqlite_master WHERE type='table';"
 
-sqlite3 "$DB" "
+sqlite3 -readonly "$DB" "
 SELECT 'ItemTable', COUNT(*) FROM ItemTable
 UNION ALL
 SELECT 'cursorDiskKV', COUNT(*) FROM cursorDiskKV
@@ -29,7 +29,7 @@ SELECT 'composerHeaders', COUNT(*) FROM composerHeaders;
 ## Pages vs freelist
 
 ```bash
-sqlite3 "$DB" "PRAGMA page_size; PRAGMA page_count; PRAGMA freelist_count;"
+sqlite3 -readonly "$DB" "PRAGMA page_size; PRAGMA page_count; PRAGMA freelist_count;"
 ```
 
 Rough GiB in use: `page_count * page_size / 1024^3`. Freelist bytes: `freelist_count * page_size`.
@@ -39,7 +39,7 @@ Rough GiB in use: `page_count * page_size / 1024^3`. Freelist bytes: `freelist_c
 Row counts are cheap relative to `SUM(LENGTH(value))`. This case measured prefix **counts** post-GC (~98.4% bubble/agentKv/checkpoint) but **not** byte GiB yet — keep the `SUM` query marked unrun until you finish it.
 
 ```bash
-sqlite3 "$DB" "
+sqlite3 -readonly "$DB" "
 SELECT
   CASE
     WHEN key LIKE 'bubbleId:%' THEN 'bubbleId'
@@ -68,10 +68,12 @@ du -sh "$HOME/.cursor/projects"
 
 ```bash
 cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
-mkdir -p state-vscdb-backup
-for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
-  [ -e "$f" ] && mv "$f" state-vscdb-backup/
-done
+BACKUP="state-vscdb-backup-$(date +%Y%m%d-%H%M%S)"
+if mkdir "$BACKUP"; then   # new folder each time; does nothing if it already exists
+  for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
+    [ -e "$f" ] && mv -n "$f" "$BACKUP"/
+  done
+fi
 ```
 
 Do **not** run `DELETE ...` or `VACUUM` until you have free disk roughly on the order of the DB size and an explicit plan for chat loss.

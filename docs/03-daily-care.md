@@ -1,12 +1,11 @@
 # Daily / weekly care
 
-> **Door:** Daily care · **Use when:** you want a two-minute weekly habit so the DB never reaches tens of GB.  
-> **Not this page:** emergency recovery → [02-how-to.md](02-how-to.md). Full incident → [CASE_STUDY.md](CASE_STUDY.md).
+A two-minute weekly check so the file never reaches tens of GB. For emergency recovery see [02-how-to.md](02-how-to.md); the full incident is in [CASE_STUDY.md](CASE_STUDY.md).
 
 ## Weekly (two minutes)
 
 ```bash
-./scripts/diagnose.sh   # prints the size too; works on macOS and Linux | tee -a ~/cursor-state-diagnose.log
+./scripts/diagnose.sh | tee -a ~/cursor-state-diagnose.log   # prints the size too; works on macOS and Linux
 ```
 
 Watch for jumps: a few GB → teens → tens of GB.
