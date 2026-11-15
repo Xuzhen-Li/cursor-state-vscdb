@@ -5,10 +5,10 @@
 #   Cursor not running and no leftover -wal: as file:...?mode=ro&immutable=1. SQLite then
 #     skips locking and does not create the -wal/-shm side files. Immutable mode ignores
 #     any -wal file, so if Cursor is in fact running, the numbers can be out of date.
-#   Cursor not running but state.vscdb-wal is non-empty (after a crash or force-quit):
+#   Cursor not running but ${DB}-wal is non-empty (after a crash or force-quit):
 #     with sqlite3 -readonly, so the changes still in the -wal are counted.
 #   Cursor running: with sqlite3 -readonly. The read is consistent, but the Cursor DB is
-#     in WAL mode, so SQLite may create or update state.vscdb-wal / state.vscdb-shm.
+#     in WAL mode, so SQLite may create or update ${DB}-wal / ${DB}-shm.
 # The script guesses which case applies with pgrep. To choose yourself, set
 #   CURSOR_DIAG_OPEN=immutable   or   CURSOR_DIAG_OPEN=readonly
 # (URI options: https://www.sqlite.org/uri.html; WAL side files: https://www.sqlite.org/wal.html)
@@ -96,7 +96,7 @@ case "$MODE" in
   readonly)
     TARGET="$DB"
     echo "readonly (Cursor looks open, a -wal is left over, or the script could not tell). The database is not written, but in WAL mode"
-    echo "SQLite may create or update state.vscdb-wal and state.vscdb-shm."
+    echo "SQLite may create or update ${DB}-wal and ${DB}-shm."
     ;;
   *)
     echo "CURSOR_DIAG_OPEN must be 'immutable' or 'readonly', not '$MODE'."

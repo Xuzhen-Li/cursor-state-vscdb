@@ -45,18 +45,25 @@ Figure: relative sizes in this case
 
 ## 2. Emergency: work again now (`mv`, never `rm`)
 
-Quit Cursor first. These commands move `state.vscdb` into a new timestamped backup folder rather than deleting it, so Cursor starts with a fresh file. `mkdir` without `-p` aborts if that folder already exists, and `mv -n` never overwrites an existing file, so a second run cannot clobber an earlier backup. If the folder cannot be created, the commands say nothing was moved and return an error.
+Quit Cursor first. These commands move `state.vscdb` into a new timestamped backup folder rather than deleting it, so Cursor starts with a fresh file. `mkdir` without `-p` aborts if that folder already exists, and `mv -n` never overwrites an existing file, so a second run cannot clobber an earlier backup. If the globalStorage folder cannot be opened, `state.vscdb` is not there, or the backup folder cannot be created, the commands say nothing was moved and return an error; they never move anything from the folder you started in.
 
 ```bash
-cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
-BACKUP="state-vscdb-backup-$(date +%Y%m%d-%H%M%S)"
-if mkdir "$BACKUP"; then
-  for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
-    if [ -e "$f" ]; then mv -n "$f" "$BACKUP"/; fi
-  done
-else
-  echo "Could not create $BACKUP, so nothing was moved." >&2
+if ! cd "$HOME/Library/Application Support/Cursor/User/globalStorage"; then
+  echo "Could not open the globalStorage folder, so nothing was moved." >&2
   false
+elif [ ! -e state.vscdb ]; then
+  echo "No state.vscdb in this folder, so nothing was moved." >&2
+  false
+else
+  BACKUP="state-vscdb-backup-$(date +%Y%m%d-%H%M%S)"
+  if mkdir "$BACKUP"; then
+    for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
+      if [ -e "$f" ]; then mv -n "$f" "$BACKUP"/; fi
+    done
+  else
+    echo "Could not create $BACKUP, so nothing was moved." >&2
+    false
+  fi
 fi
 ```
 

@@ -69,15 +69,22 @@ du -sh "$HOME/.cursor/projects"
 ## Emergency move (not delete)
 
 ```bash
-cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
-BACKUP="state-vscdb-backup-$(date +%Y%m%d-%H%M%S)"
-if mkdir "$BACKUP"; then   # new folder each time; does nothing if it already exists
-  for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
-    if [ -e "$f" ]; then mv -n "$f" "$BACKUP"/; fi
-  done
-else
-  echo "Could not create $BACKUP, so nothing was moved." >&2
+if ! cd "$HOME/Library/Application Support/Cursor/User/globalStorage"; then
+  echo "Could not open the globalStorage folder, so nothing was moved." >&2
   false
+elif [ ! -e state.vscdb ]; then
+  echo "No state.vscdb in this folder, so nothing was moved." >&2
+  false
+else
+  BACKUP="state-vscdb-backup-$(date +%Y%m%d-%H%M%S)"
+  if mkdir "$BACKUP"; then   # new folder each time; does nothing if it already exists
+    for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
+      if [ -e "$f" ]; then mv -n "$f" "$BACKUP"/; fi
+    done
+  else
+    echo "Could not create $BACKUP, so nothing was moved." >&2
+    false
+  fi
 fi
 ```
 
