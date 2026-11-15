@@ -15,6 +15,8 @@ ps aux | grep -i "[C]ursor"
 
 ## 1. Read-only diagnose
 
+None of these commands write to the database. The manual `sqlite3 -readonly` lines below can still create or update `state.vscdb-wal` / `state.vscdb-shm`, because the Cursor database is in WAL mode; the script avoids that when it can (see the README).
+
 ```bash
 cd /path/to/cursor-state-vscdb   # clone root
 ./scripts/diagnose.sh           # finds the file on macOS and Linux; elsewhere: CURSOR_STATE_DB=/path/state.vscdb ./scripts/diagnose.sh

@@ -4,7 +4,7 @@
 
 我的 Mac 重启后，Cursor 一直停在「Loading chats」，Agent 连一句 `hello` 都不回。看起来像网络问题，其实不是：Cursor 本地的 SQLite 文件 `state.vscdb` 已经涨到大约 52 GB。把这个文件移走、让 Cursor 新建一个之后，`hello` 马上就有回复了。
 
-这里放着这次排查的完整记录、一个只读的检查脚本，以及我让 Cursor 恢复可用、又不丢旧数据的做法。
+这里放着这次排查的完整记录、一个不写数据库的检查脚本，以及我让 Cursor 恢复可用、又不丢旧数据的做法。
 
 ## 检查你自己的文件
 
@@ -18,7 +18,8 @@ cd cursor-state-vscdb
 
 打开方式取决于 Cursor 是否在运行（脚本用 `pgrep` 判断；也可以设 `CURSOR_DIAG_OPEN=immutable` 或 `CURSOR_DIAG_OPEN=readonly` 自己指定）：
 
-- Cursor 已退出：以 `file:…?mode=ro&immutable=1` 打开，SQLite 不会新建附属文件。如果 Cursor 其实还在运行，读出的数字可能前后不一致。
+- Cursor 已退出、且没有残留的 `state.vscdb-wal`：以 `file:…?mode=ro&immutable=1` 打开，SQLite 不会新建附属文件。immutable 模式会忽略 `-wal` 文件，所以如果 Cursor 其实还在运行，读出的数字可能是旧的。
+- Cursor 已退出、但 `state.vscdb-wal` 不为空（崩溃或强制退出后会这样）：改用 `sqlite3 -readonly`，把 `-wal` 里还没合并的改动也算进去，并说明原因。
 - Cursor 在运行：用 `sqlite3 -readonly` 打开。Cursor 的数据库是 WAL 模式，SQLite 可能在旁边新建或更新 `state.vscdb-wal` 和 `state.vscdb-shm`。
 
 文件通常的位置（macOS 和 Linux 上脚本默认找这里）：
@@ -35,7 +36,7 @@ cd cursor-state-vscdb
 CURSOR_STATE_DB=/完整路径/state.vscdb ./scripts/diagnose.sh
 ```
 
-Cursor 运行时会一直写这个文件。想要准确的数字、也不想产生附属文件，请先退出 Cursor。
+Cursor 运行时会一直写这个文件，想要准确的数字请先退出 Cursor。正常退出后 `-wal` 通常是空的，不会产生附属文件；崩溃后脚本会用 `-readonly` 读残留的 `-wal`，这时可能新建 `state.vscdb-shm`。
 
 ## Cursor 现在就卡住了怎么办
 

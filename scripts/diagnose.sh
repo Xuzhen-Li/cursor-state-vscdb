@@ -2,9 +2,11 @@
 # Health check for Cursor's globalStorage/state.vscdb. It never writes to the database.
 #
 # How it opens the file:
-#   Cursor not running: as file:...?mode=ro&immutable=1. SQLite then skips locking and
-#     does not create the -wal/-shm side files. If Cursor is in fact running and writing,
-#     the numbers can be wrong or inconsistent, so quit Cursor first.
+#   Cursor not running and no leftover -wal: as file:...?mode=ro&immutable=1. SQLite then
+#     skips locking and does not create the -wal/-shm side files. Immutable mode ignores
+#     any -wal file, so if Cursor is in fact running, the numbers can be out of date.
+#   Cursor not running but state.vscdb-wal is non-empty (after a crash or force-quit):
+#     with sqlite3 -readonly, so the changes still in the -wal are counted.
 #   Cursor running: with sqlite3 -readonly. The read is consistent, but the Cursor DB is
 #     in WAL mode, so SQLite may create or update state.vscdb-wal / state.vscdb-shm.
 # The script guesses which case applies with pgrep. To choose yourself, set
@@ -73,6 +75,11 @@ if [[ -z "$MODE" ]]; then
     echo "(pgrep not found; cannot tell if Cursor is running, so using -readonly)"
   elif cursor_running; then
     MODE=readonly
+  elif [[ -s "${DB}-wal" ]]; then
+    MODE=readonly
+    echo
+    echo "(state.vscdb-wal is not empty, e.g. after a crash or force-quit; immutable mode"
+    echo " would ignore it and show old numbers, so using -readonly)"
   else
     MODE=immutable
   fi
@@ -84,11 +91,11 @@ case "$MODE" in
   immutable)
     TARGET="file:$(uri_path "$DB")?mode=ro&immutable=1"
     echo "immutable (Cursor looks closed). No -wal/-shm files are created."
-    echo "If Cursor is actually running, these numbers may be inconsistent."
+    echo "Any -wal file is ignored; if Cursor is actually running, these numbers may be out of date."
     ;;
   readonly)
     TARGET="$DB"
-    echo "readonly (Cursor looks open, or the script could not tell). The database is not written, but in WAL mode"
+    echo "readonly (Cursor looks open, a -wal is left over, or the script could not tell). The database is not written, but in WAL mode"
     echo "SQLite may create or update state.vscdb-wal and state.vscdb-shm."
     ;;
   *)

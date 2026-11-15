@@ -2,6 +2,8 @@
 
 Fully quit the IDE before any write/move. Ignore macOS `CursorUIViewService`.
 
+The `sqlite3 -readonly` commands below do not change the database, but because it is in WAL mode they can create or update `state.vscdb-wal` / `state.vscdb-shm` next to it. `./scripts/diagnose.sh` avoids that when Cursor is closed and no `-wal` is left over.
+
 ## Size
 
 ```bash

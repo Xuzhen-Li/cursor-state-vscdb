@@ -18,7 +18,8 @@ The script never writes to the database. It prints the file size, table row coun
 
 How it opens the file depends on whether Cursor is running (it checks with `pgrep`; set `CURSOR_DIAG_OPEN=immutable` or `CURSOR_DIAG_OPEN=readonly` to choose yourself):
 
-- Cursor closed: it opens the file as `file:…?mode=ro&immutable=1`. SQLite then creates no side files. If Cursor is in fact running, the numbers may be inconsistent.
+- Cursor closed and no leftover `state.vscdb-wal`: it opens the file as `file:…?mode=ro&immutable=1`. SQLite then creates no side files. Immutable mode ignores any `-wal` file, so if Cursor is in fact running, the numbers may be out of date.
+- Cursor closed but `state.vscdb-wal` is not empty (this happens after a crash or force-quit): it uses `sqlite3 -readonly`, so the changes still in the `-wal` are counted, and says why.
 - Cursor running: it uses `sqlite3 -readonly`. The Cursor database is in WAL mode, so SQLite may create or update `state.vscdb-wal` and `state.vscdb-shm` next to it.
 
 Where the file usually is (the script looks there by default on macOS and Linux):
@@ -35,7 +36,7 @@ For any other location:
 CURSOR_STATE_DB=/full/path/to/state.vscdb ./scripts/diagnose.sh
 ```
 
-Quit Cursor first if you want exact numbers and no side files; Cursor writes to the file while it runs.
+Quit Cursor first if you want exact numbers; Cursor writes to the file while it runs. After a normal quit the `-wal` is usually empty and no side files are created; after a crash the script reads the leftover `-wal` with `-readonly`, which may create `state.vscdb-shm`.
 
 ## If Cursor is stuck right now
 

@@ -584,6 +584,8 @@ for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
 done
 ```
 
+这是当时实际执行的命令。自己照做时请用 [02-how-to.md](../02-how-to.md) 第 2 节的写法，它不会覆盖之前的备份。
+
 然后重新打开 Cursor。
 
 因为找不到：
@@ -916,11 +918,15 @@ state.vscdb-shm
 
 ```bash
 cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
-mkdir -p state-vscdb-backup
-for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
-    [ -e "$f" ] && mv "$f" state-vscdb-backup/
-done
+BACKUP="state-vscdb-backup-$(date +%Y%m%d-%H%M%S)"
+if mkdir "$BACKUP"; then
+    for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
+        [ -e "$f" ] && mv -n "$f" "$BACKUP"/
+    done
+fi
 ```
+
+备份文件夹名里带日期和时间；`mkdir` 不加 `-p`，文件夹已存在就停下；`mv -n` 不会替换已有文件。所以重复执行也不会覆盖之前的备份。
 
 Cursor Community Forum 的支持回复也给出过类似方案：compaction 失败或库过大时，完整退出后把 oversized DB **移走**，让 Cursor 创建新的小库。
 
