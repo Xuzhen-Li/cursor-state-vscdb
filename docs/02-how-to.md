@@ -1,8 +1,8 @@
 # How to: diagnose and recover (safely)
 
-Use this page to check the size of `state.vscdb`, get Cursor working again, and clean up in a safe order. Why the symptoms look like a network fault is in [01-principles.md](01-principles.md); the full story is in [CASE_STUDY.md](CASE_STUDY.md); a longer command list is in [DIAGNOSTIC_COMMANDS.md](DIAGNOSTIC_COMMANDS.md).
+Use this guide to check the size of `state.vscdb`, get Cursor working again, and clean up safely. Why the symptoms look like a network fault is explained in [01-principles.md](01-principles.md); the full write-up is in [CASE_STUDY.md](CASE_STUDY.md); a longer command list is in [DIAGNOSTIC_COMMANDS.md](DIAGNOSTIC_COMMANDS.md).
 
-The paths below are the macOS ones. On Linux the folder is `~/.config/Cursor/User/globalStorage/`; on Windows it is `%APPDATA%\Cursor\User\globalStorage\`.
+The paths below are for macOS. On Linux the folder is `~/.config/Cursor/User/globalStorage/`; on Windows it is `%APPDATA%\Cursor\User\globalStorage\`.
 
 ## 0. Quit the IDE first (for moves / GC / VACUUM)
 
@@ -11,11 +11,11 @@ The paths below are the macOS ones. On Linux the folder is `~/.config/Cursor/Use
 ps aux | grep -i "[C]ursor"
 ```
 
-`CursorUIViewService` is a macOS service and can stay. No other Cursor or Electron process should be left.
+`CursorUIViewService` is a macOS service and can remain running. No other Cursor or Electron process should be left.
 
 ## 1. Read-only diagnose
 
-None of these commands write to the database. The manual `sqlite3 -readonly` lines below can still create or update `state.vscdb-wal` / `state.vscdb-shm`, because the Cursor database is in WAL mode; the script avoids that when it can (see the README).
+None of these commands write to the database. The manual `sqlite3 -readonly` lines below can still create or update `state.vscdb-wal` / `state.vscdb-shm` because the Cursor database is in WAL mode; the script avoids that whenever possible (see the README).
 
 ```bash
 cd /path/to/cursor-state-vscdb   # clone root
@@ -28,13 +28,13 @@ sqlite3 -readonly "$HOME/Library/Application Support/Cursor/User/globalStorage/s
   "PRAGMA page_size; PRAGMA page_count; PRAGMA freelist_count;"
 ```
 
-Rough size guide (my own rule of thumb, not from Cursor):
+Rough size guide (a personal rule of thumb, not from Cursor):
 
 | `state.vscdb` | Action |
 |---------------|--------|
 | &lt; 2 GB | Monitor |
-| 2–10 GB | Export chats you need; think about GC; start new chats instead of growing one forever |
-| 10–30 GB | Clean up soon; free disk space before any compact |
+| 2–10 GB | Export chats you need; consider GC; start new chats rather than growing a single thread indefinitely |
+| 10–30 GB | Clean up soon; free disk space before compacting |
 | &gt; 30 GB | Treat it as an incident; if Cursor is unusable, move the file aside (section 2) |
 
 Figure: relative sizes in this case
@@ -45,7 +45,7 @@ Figure: relative sizes in this case
 
 ## 2. Emergency: work again now (`mv`, never `rm`)
 
-Quit Cursor first. These commands move `state.vscdb` into a new backup folder named with the date and time (they do not delete it), so Cursor starts with a new file. `mkdir` without `-p` stops if that folder already exists, and `mv -n` never replaces a file, so a second run cannot overwrite an earlier backup.
+Quit Cursor first. These commands move `state.vscdb` into a new timestamped backup folder rather than deleting it, so Cursor starts with a fresh file. `mkdir` without `-p` aborts if that folder already exists, and `mv -n` never overwrites an existing file, so a second run cannot clobber an earlier backup.
 
 ```bash
 cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
@@ -57,7 +57,7 @@ if mkdir "$BACKUP"; then
 fi
 ```
 
-Start Cursor, open a New Chat and send `hello`. Keep the backup folder until you are sure you do not need anything in it.
+Start Cursor, open a New Chat, and send `hello`. Keep the backup folder until you are certain you no longer need anything inside it.
 
 Figure: recovery flow
 
@@ -75,11 +75,11 @@ Quit → confirm agent-transcripts exist
   → Quit again → re-run diagnose.sh (trust page_count)
 ```
 
-What I measured: GC alone on the ~52 GB file ran for over an hour, the WAL file grew to about the size of the DB, free disk fell to ~18 GiB, and only ~119 MiB came back. If the freelist is already small and most rows are still in use, a second GC will not help.
+What I measured: GC alone on the ~52 GB file ran for over an hour, the WAL file grew to roughly the size of the DB, free disk dropped to ~18 GiB, and only ~119 MiB was reclaimed. If the freelist is already small and most rows are still live, a second GC will not help.
 
-If the file is still huge: export what you need, delete old chats or the few very long ones, run GC, quit. That is safer than deleting rows with SQL and running `VACUUM`.
+If the file remains huge: export what you need, delete old chats or the few very long ones, run GC, and quit. That is safer than deleting rows with SQL and running `VACUUM`.
 
-To see which kind of row takes the bytes (slow, optional; I have not run this on the 52 GB file, so the case has no numbers for it):
+To inspect which row type consumes the most bytes (slow, optional; I have not run this on the 52 GB file, so the case study has no numbers for it):
 
 ```sql
 SELECT
@@ -106,15 +106,15 @@ DELETE FROM cursorDiskKV WHERE key LIKE 'agentKv:%';
 VACUUM;
 ```
 
-Only consider it after you have a backup and know what you will lose.
+Only consider it once you have a backup and know what data will be lost.
 
 ## 5. Free disk before compact
 
-You need free disk about the size of the DB, and up to twice that to be safe. In this case the WAL during GC reached about the size of `state.vscdb` (~52 GB) and free disk fell to ~18 GiB. If the disk fills up halfway through a compact, things get worse.
+You need free disk space roughly equal to the size of the DB, and up to twice that to be safe. In this case the WAL during GC reached about the size of `state.vscdb` (~52 GB) and free disk fell to ~18 GiB. If the disk fills up midway through a compact, recovery becomes much harder.
 
 ## 6. Redact secrets
 
-`ps` output can contain `--api-key` values. Do not paste raw process lists on GitHub, Reddit or forums.
+`ps` output can expose `--api-key` values. Do not paste raw process lists on GitHub, Reddit, or forums.
 
 ## Forum peers
 

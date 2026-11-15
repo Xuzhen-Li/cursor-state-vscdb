@@ -1,8 +1,8 @@
 # Diagnostic commands (read-only first)
 
-Fully quit the IDE before any write/move. Ignore macOS `CursorUIViewService`.
+Fully quit the IDE before any write or move. Ignore macOS `CursorUIViewService`.
 
-The `sqlite3 -readonly` commands below do not change the database, but because it is in WAL mode they can create or update `state.vscdb-wal` / `state.vscdb-shm` next to it. `./scripts/diagnose.sh` avoids that when Cursor is closed and no `-wal` is left over.
+The `sqlite3 -readonly` commands below do not modify the database, though because it uses WAL mode they can create or update `state.vscdb-wal` / `state.vscdb-shm` alongside it. `./scripts/diagnose.sh` avoids that when Cursor is closed and no `-wal` is left over.
 
 ## Size
 
@@ -38,7 +38,7 @@ Rough GiB in use: `page_count * page_size / 1024^3`. Freelist bytes: `freelist_c
 
 ## Key prefix sketch (read-only; can be slow)
 
-Row counts are cheap relative to `SUM(LENGTH(value))`. This case measured prefix **counts** post-GC (~98.4% bubble/agentKv/checkpoint) but **not** byte GiB yet — keep the `SUM` query marked unrun until you finish it.
+Row counts are cheap compared with `SUM(LENGTH(value))`. This case measured prefix counts post-GC (~98.4% bubble/agentKv/checkpoint) but not byte GiB yet — keep the `SUM` query marked unrun until you finish running it.
 
 ```bash
 sqlite3 -readonly "$DB" "
@@ -78,7 +78,7 @@ if mkdir "$BACKUP"; then   # new folder each time; does nothing if it already ex
 fi
 ```
 
-Do **not** run `DELETE ...` or `VACUUM` until you have free disk roughly on the order of the DB size and an explicit plan for chat loss.
+Do not run `DELETE ...` or `VACUUM` until you have free disk space roughly on the order of the DB size and an explicit plan for chat loss.
 
 ## Post-GC reference (this case; Cursor 3.22.7)
 
@@ -96,6 +96,6 @@ checkpointId rows   4,659       (~0.17%)
 sum of three        ≈98.39% of cursorDiskKV rows
 ```
 
-Byte GiB per class: **not measured yet**. Use the key-prefix `SUM(LENGTH(value))` query above; it can be very slow on a 50+ GB DB. Do not invent GiB numbers.
+Byte GiB per class: not measured yet. Use the key-prefix `SUM(LENGTH(value))` query above; it can be very slow on a 50+ GB DB. Do not invent GiB numbers.
 
-While freelist is already ~186 pages, do **not** expect `VACUUM` to shrink the main file. Prefer Export → Delete Old Chats… → GC → Quit when following staff order (Delete Old Chats untested in this case study). Blind second GC is pointless with live data dominating.
+Because the freelist is already ~186 pages, do not expect `VACUUM` to shrink the main file. Prefer Export → Delete Old Chats… → GC → Quit when following staff order (Delete Old Chats untested in this case study). A blind second GC is pointless when live data dominates.

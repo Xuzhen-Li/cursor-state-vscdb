@@ -2,9 +2,9 @@
 
 [English](README.md)
 
-我的 Mac 重启后，Cursor 一直停在「Loading chats」，Agent 连一句 `hello` 都不回。看起来像网络问题，其实不是：Cursor 本地的 SQLite 文件 `state.vscdb` 已经涨到大约 52 GB。把这个文件移走、让 Cursor 新建一个之后，`hello` 马上就有回复了。
+我的 Mac 重启后，Cursor 一直卡在「Loading chats」，Agent 连一句 `hello` 都不回复。表面上看像网络故障，实际原因在于 Cursor 本地的 SQLite 文件 `state.vscdb` 已经膨胀到约 52 GB。将该文件移走并让 Cursor 新建数据库后，`hello` 立刻恢复响应。
 
-这里放着这次排查的完整记录、一个不写数据库的检查脚本，以及我让 Cursor 恢复可用、又不丢旧数据的做法。
+本仓库记录了这次排查的完整过程、一个不写数据库的检查脚本，以及在不丢失旧数据的前提下恢复 Cursor 正常使用的方法。
 
 ## 检查你自己的文件
 
@@ -14,33 +14,33 @@ cd cursor-state-vscdb
 ./scripts/diagnose.sh
 ```
 
-脚本不会写数据库，会打印文件大小、各表行数、页数和空闲页数。需要 `bash`；行数和页数还需要 `sqlite3` 命令（没有的话只显示大小）。
+脚本不会向数据库写入任何内容，它会输出文件大小、各表行数、总页数和空闲页数。运行需要 `bash`；统计行数和页数还需要安装 `sqlite3` 命令（若未安装则仅显示文件大小）。
 
-打开方式取决于 Cursor 是否在运行（脚本用 `pgrep` 判断；也可以设 `CURSOR_DIAG_OPEN=immutable` 或 `CURSOR_DIAG_OPEN=readonly` 自己指定）：
+打开方式取决于 Cursor 是否正在运行（脚本通过 `pgrep` 判断；也可设置 `CURSOR_DIAG_OPEN=immutable` 或 `CURSOR_DIAG_OPEN=readonly` 手动指定）：
 
-- Cursor 已退出、且没有残留的 `state.vscdb-wal`：以 `file:…?mode=ro&immutable=1` 打开，SQLite 不会新建附属文件。immutable 模式会忽略 `-wal` 文件，所以如果 Cursor 其实还在运行，读出的数字可能是旧的。
-- Cursor 已退出、但 `state.vscdb-wal` 不为空（崩溃或强制退出后会这样）：改用 `sqlite3 -readonly`，把 `-wal` 里还没合并的改动也算进去，并说明原因。
-- Cursor 在运行：用 `sqlite3 -readonly` 打开。Cursor 的数据库是 WAL 模式，SQLite 可能在旁边新建或更新 `state.vscdb-wal` 和 `state.vscdb-shm`。
+- Cursor 已退出，且没有残留的 `state.vscdb-wal`：以 `file:…?mode=ro&immutable=1` 打开，SQLite 不会生成附属文件。immutable 模式会忽略 `-wal` 文件，因此若 Cursor 实际仍在运行，读取到的数字可能是旧的。
+- Cursor 已退出，但 `state.vscdb-wal` 非空（崩溃或强制退出后会出现这种情况）：改用 `sqlite3 -readonly`，将 `-wal` 中尚未合并的改动一并计入，并打印选择该模式的原因。
+- Cursor 正在运行：使用 `sqlite3 -readonly` 打开。由于 Cursor 的数据库处于 WAL 模式，SQLite 可能会在同目录下新建或更新 `state.vscdb-wal` 与 `state.vscdb-shm`。
 
-文件通常的位置（macOS 和 Linux 上脚本默认找这里）：
+文件默认位置（脚本在 macOS 和 Linux 上自动查找）：
 
 | 系统 | 路径 |
 |------|------|
 | macOS | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` |
 | Linux | `~/.config/Cursor/User/globalStorage/state.vscdb` |
-| Windows | `%APPDATA%\Cursor\User\globalStorage\state.vscdb`（没有默认值，需设置 `CURSOR_STATE_DB`，WSL 下也一样） |
+| Windows | `%APPDATA%\Cursor\User\globalStorage\state.vscdb`（无默认值，需设置 `CURSOR_STATE_DB`，WSL 下同样适用） |
 
-文件在别处时：
+文件位于其他路径时：
 
 ```bash
 CURSOR_STATE_DB=/完整路径/state.vscdb ./scripts/diagnose.sh
 ```
 
-Cursor 运行时会一直写这个文件，想要准确的数字请先退出 Cursor。正常退出后 `-wal` 通常是空的，不会产生附属文件；崩溃后脚本会用 `-readonly` 读残留的 `-wal`，这时可能新建 `state.vscdb-shm`。
+Cursor 运行时会持续写入该文件，如需精确数字请先退出 Cursor。正常退出后 `-wal` 通常为空，不会产生附属文件；崩溃后脚本会用 `-readonly` 读取残留的 `-wal`，此时可能会生成 `state.vscdb-shm`。
 
 ## Cursor 现在就卡住了怎么办
 
-如果文件有几十 GB、Cursor 加载不出聊天：先退出 Cursor，再把 `state.vscdb` 和同目录的 `-wal`、`-shm` 文件移到一个备份文件夹里，不要删除。下次启动时 Cursor 会新建一个空文件。具体命令见 [怎么做](docs/02-how-to.md) 第 2 节。
+如果文件已有几十 GB 且 Cursor 无法加载聊天记录：先退出 Cursor，再将 `state.vscdb` 及其同目录下的 `-wal`、`-shm` 文件移入备份文件夹，切勿删除。下次启动时 Cursor 会自动新建一个空文件。具体命令见 [怎么做](docs/02-how-to.md) 第 2 节。
 
 ## 实测数据
 
