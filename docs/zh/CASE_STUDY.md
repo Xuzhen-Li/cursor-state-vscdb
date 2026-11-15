@@ -923,10 +923,13 @@ if mkdir "$BACKUP"; then
     for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
         [ -e "$f" ] && mv -n "$f" "$BACKUP"/
     done
+else
+    echo "无法创建 $BACKUP，没有移动任何文件。" >&2
+    false
 fi
 ```
 
-备份文件夹名里带日期和时间；`mkdir` 不加 `-p`，文件夹已存在就停下；`mv -n` 不会替换已有文件。所以重复执行也不会覆盖之前的备份。
+备份文件夹名里带日期和时间；`mkdir` 不加 `-p`，文件夹已存在就停下；`mv -n` 不会替换已有文件。所以重复执行也不会覆盖之前的备份。文件夹建不成时，会提示没有移动任何文件，并返回错误。
 
 Cursor Community Forum 的支持回复也给出过类似方案：compaction 失败或库过大时，完整退出后把 oversized DB **移走**，让 Cursor 创建新的小库。
 

@@ -351,10 +351,13 @@ if mkdir "$BACKUP"; then
   for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
     [ -e "$f" ] && mv -n "$f" "$BACKUP"/
   done
+else
+  echo "Could not create $BACKUP, so nothing was moved." >&2
+  false
 fi
 ```
 
-The backup folder gets the date and time in its name, `mkdir` without `-p` stops if it already exists, and `mv -n` never replaces a file, so running this twice cannot overwrite an earlier backup.
+The backup folder gets the date and time in its name, `mkdir` without `-p` stops if it already exists, and `mv -n` never replaces a file, so running this twice cannot overwrite an earlier backup. If the folder cannot be created, it says nothing was moved and returns an error.
 
 3. Relaunch → fresh DB → New Chat → `hello` → **near-instant** (measured).
 4. Keep the backup; old chat index may not appear in the new DB.

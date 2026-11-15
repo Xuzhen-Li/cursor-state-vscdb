@@ -75,6 +75,9 @@ if mkdir "$BACKUP"; then   # new folder each time; does nothing if it already ex
   for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
     [ -e "$f" ] && mv -n "$f" "$BACKUP"/
   done
+else
+  echo "Could not create $BACKUP, so nothing was moved." >&2
+  false
 fi
 ```
 

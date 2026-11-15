@@ -45,7 +45,7 @@ Figure: relative sizes in this case
 
 ## 2. Emergency: work again now (`mv`, never `rm`)
 
-Quit Cursor first. These commands move `state.vscdb` into a new timestamped backup folder rather than deleting it, so Cursor starts with a fresh file. `mkdir` without `-p` aborts if that folder already exists, and `mv -n` never overwrites an existing file, so a second run cannot clobber an earlier backup.
+Quit Cursor first. These commands move `state.vscdb` into a new timestamped backup folder rather than deleting it, so Cursor starts with a fresh file. `mkdir` without `-p` aborts if that folder already exists, and `mv -n` never overwrites an existing file, so a second run cannot clobber an earlier backup. If the folder cannot be created, the commands say nothing was moved and return an error.
 
 ```bash
 cd "$HOME/Library/Application Support/Cursor/User/globalStorage"
@@ -54,6 +54,9 @@ if mkdir "$BACKUP"; then
   for f in state.vscdb state.vscdb-shm state.vscdb-wal; do
     [ -e "$f" ] && mv -n "$f" "$BACKUP"/
   done
+else
+  echo "Could not create $BACKUP, so nothing was moved." >&2
+  false
 fi
 ```
 

@@ -78,7 +78,7 @@ if [[ -z "$MODE" ]]; then
   elif [[ -s "${DB}-wal" ]]; then
     MODE=readonly
     echo
-    echo "(state.vscdb-wal is not empty, e.g. after a crash or force-quit; immutable mode"
+    echo "(${DB}-wal is not empty, e.g. after a crash or force-quit; immutable mode"
     echo " would ignore it and show old numbers, so using -readonly)"
   else
     MODE=immutable
