@@ -18,7 +18,7 @@ Cursor 也会一直转圈，没有回复。
 
 更奇怪的是，我连续强制退出、重新启动很多次都没有改善，但某一次重新打开之后，它又突然完全恢复正常，而且聊天加载和 AI 回复都非常快。
 
-最开始我怀疑过网络、代理、Cursor 服务端、HTTP/2、Agent 后台进程等问题。但最后经过一轮比较完整的排查，真正值得怀疑的东西出现在本机：
+最开始我怀疑过网络、代理、Cursor 服务端、HTTP/2、Agent 后台进程等问题。但最后经过一次比较完整的排查，真正值得怀疑的东西出现在本机：
 
 ```text
 state.vscdb
@@ -1144,7 +1144,7 @@ API key / token / 用户名 / 项目私有路径
 ≈98.4% 行落在 bubbleId / agentKv / checkpointId
 ```
 
-第一批值得检查的命令：
+首先值得检查的命令：
 
 ```bash
 du -h "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
