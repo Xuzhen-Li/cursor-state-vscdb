@@ -1,4 +1,4 @@
-# Reddit draft (do not post until Jason signs off)
+# Reddit draft (author approval required before posting)
 
 ## Suggested subreddits (pick one; bot should confirm rules)
 
@@ -46,6 +46,6 @@ Happy to answer questions. Do not paste `ps` lines that include API keys.
 
 ## Notes for the Reddit bot
 
-- Draft only; Jason presses send / signs off.
+- Draft only; publish only after author confirmation.
 - Prefer r/cursor; check subreddit rules (self-promo / link limits).
 - No API keys, tokens, or private paths beyond the standard Application Support path above.

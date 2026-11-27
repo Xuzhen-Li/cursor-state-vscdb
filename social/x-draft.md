@@ -1,4 +1,4 @@
-# X draft for @jasonlixuzhen (English-only; do not post until Jason signs off)
+# X draft for @jasonlixuzhen (English-only; author approval required before posting)
 
 ## Suggested single post (≤280 chars preferred; thread OK if needed)
 
@@ -20,5 +20,5 @@ Cursor stuck on “Loading chats” after a Mac reboot — even “hello” spun
 
 - English only.
 - Do not attach secrets / `ps` with `--api-key`.
-- Wait for Jason to approve before posting.
+- Wait for author approval before posting.
 - Prefer Option A if one post; Option B if threading.
